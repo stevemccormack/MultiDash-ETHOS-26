@@ -262,6 +262,8 @@ Current goals:
 
 Created by **Steven McCormack**.
 
+With inspiration from Rob Thomson's scripts for Rotorflight and DashX
+
 MultiDash is an evolving ETHOS telemetry dashboard project. It is not currently claiming broad compatibility beyond the tested ETHOS 26 X18/X18RS setup.
 
 ---
