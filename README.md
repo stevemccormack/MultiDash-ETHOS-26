@@ -272,6 +272,6 @@ MultiDash is an evolving ETHOS telemetry dashboard project. It is not currently 
 
 ## License
 
-This project is released under the **MIT License**.
+This project is released under the **GPL License**.
 
 See the `LICENSE` file for details.
