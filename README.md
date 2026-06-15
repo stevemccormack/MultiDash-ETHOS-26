@@ -4,12 +4,6 @@
 
 It is designed as a flexible, evolving dashboard for RC telemetry setups. MultiDash focuses on clean live telemetry, configurable battery scaling, session timing, user-selectable telemetry fields, and a post-session summary screen with min/max statistics.
 
-> **Experimental status:** MultiDash is still actively evolving. Features, layout, settings, telemetry behavior, and supported use cases may change between versions.
-
-> **Tested hardware:** MultiDash has only been tested on the **FrSky X18** and **FrSky X18RS** so far.
-
----
-
 ## RC1 Release Status
 
 MultiDash RC1 has only been tested using the large ETHOS widget size that keeps the normal ETHOS top/bottom system bars visible, including model and battery/status information. It has not been tested with other widget sizes or with the larger/fullscreen-style widget layout that blocks or replaces the normal ETHOS model and battery/status areas. Layout issues may occur outside the tested widget size.
