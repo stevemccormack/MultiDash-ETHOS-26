@@ -12,6 +12,8 @@ It is designed as a flexible, evolving dashboard for RC telemetry setups. MultiD
 
 ## RC1 Release Status
 
+MultiDash RC1 has only been tested using the large ETHOS widget size that keeps the normal ETHOS top/bottom system bars visible, including model and battery/status information. It has not been tested with other widget sizes or with the larger/fullscreen-style widget layout that blocks or replaces the normal ETHOS model and battery/status areas. Layout issues may occur outside the tested widget size.
+
 MultiDash RC1 is built for **FrSky ETHOS 26.1.0 RC4 or later**.
 
 Tested hardware:
