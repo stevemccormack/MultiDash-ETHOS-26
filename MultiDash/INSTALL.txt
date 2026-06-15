@@ -1,0 +1,9 @@
+Copy this entire MultiDash folder to your ETHOS 26 Lua widgets/scripts location.
+
+Required structure:
+
+MultiDash/
+  main.lua
+  models/
+
+The models folder is used for per-model settings.
