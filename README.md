@@ -2,8 +2,6 @@
   <img src="MultiDash/MultiDash.png" alt="MultiDash logo" width="360">
 </p>
 
-# MultiDash
-
 **MultiDash** is an experimental telemetry dashboard built specifically for **FrSky ETHOS 26**.
 
 It provides configurable live telemetry, battery display, session timing, custom telemetry fields, and a post-flight/session summary with min/max statistics and color-coded status feedback.
