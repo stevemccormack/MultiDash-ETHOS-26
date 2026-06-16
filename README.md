@@ -17,8 +17,6 @@ Theoretically, this dashboard should be able to evolve to work with any protocol
 ## System Requirements
 
 - **ETHOS 26.1.0 RC4 or later**
-- FrSky ETHOS 26 radio with color widget support
-
 ---
 
 ## Tested Hardware
@@ -96,8 +94,6 @@ MultiDash/MultiDash.png
 ```
 
 This version also changes how settings save. RC1 was writing settings too often. RC2 should only save settings after something changes. Bitmap loading was also made safer so a bad or missing image should be less likely to cause issues.
-
-A broken `saveKeys` optimization from an earlier RC2 test build was removed. The current RC2 build should not have the `saveKeys` nil error.
 
 ---
 
