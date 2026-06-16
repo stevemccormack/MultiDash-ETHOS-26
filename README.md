@@ -55,8 +55,6 @@ The project started around aircraft telemetry, but it is not intended to stay ai
 
 The main dashboard can display:
 
-- Model name from ETHOS
-- Flap/status text
 - Optional model image
 - Battery display
 - Link quality / RSSI-style telemetry
