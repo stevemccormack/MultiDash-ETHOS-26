@@ -140,6 +140,13 @@ MultiDash is still **highly experimental**.
 
 It has not been tested across all ETHOS 26 radios, telemetry systems, receivers, protocols, widget sizes, or model types. Layout, behavior, and configuration options may change in future releases. Please message me with any issues you run into. Include as much detail as possible, such as your radio model, ETHOS version, receiver/protocol, telemetry sources used, screenshots if available, and steps to reproduce the issue. Use at your own risk and verify all telemetry values before relying on them.
 
+
+Credits
+
+MultiDash was created and developed by Steven McCormack.
+
+This project is experimental and is being developed for FrSky ETHOS 26 and takes inspiration from Rob Thomson's Lua scripts for Rotorflight and DashX.
+
 ---
 
 ## License
