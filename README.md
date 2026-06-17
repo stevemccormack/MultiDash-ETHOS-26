@@ -2,11 +2,8 @@
   <img src="MultiDash/MultiDash.png" alt="MultiDash logo" width="360">
 </p>
 
-**MultiDash** is an experimental telemetry dashboard built specifically for **FrSky ETHOS 26**.
-
-It provides configurable live telemetry, battery display, session timing, custom telemetry fields, and a post-flight/session summary with min/max statistics and color-coded status feedback.
-
-Theoretically, this dashboard should be able to evolve to work with any protocol on any ETHOS 26 radio.
+**MultiDash** is an experimental telemetry dashboard built specifically for **ETHOS 26**.
+It provides configurable live telemetry, battery display, session timing, custom telemetry fields, and a post-flight/session summary with min/max statistics and color-coded status feedback. Theoretically, this dashboard should be able to evolve to work with any protocol on any ETHOS 26 radio.
 
 > **Current status:** MultiDash is still highly experimental. Layout, behavior, and configuration options may change in future releases. Use at your own risk.
 
@@ -18,8 +15,6 @@ Theoretically, this dashboard should be able to evolve to work with any protocol
 ---
 
 ## Tested Hardware
-
-MultiDash has been tested on:
 
 - FrSky X18
 - FrSky X18RS
@@ -33,11 +28,7 @@ Partially simulator-tested on:
 
 ## Widget Size Note
 
-MultiDash has only been tested using the large ETHOS widget size that keeps the normal ETHOS top/bottom system bars visible, including model and battery/status information.
-
-It has not been tested with other widget sizes or with the larger/fullscreen-style widget layout that blocks or replaces the normal ETHOS model and battery/status areas.
-
-Layout issues may occur outside the tested widget size.
+MultiDash has only been tested using the large ETHOS widget size that keeps the normal ETHOS top/bottom system bars visible, including model and battery/status information. It has not been tested with other widget sizes or with the larger/fullscreen-style widget layout that blocks or replaces the normal ETHOS model and battery/status areas. Layout issues may occur outside the tested widget size.
 
 ---
 
@@ -81,11 +72,7 @@ Layout issues may occur outside the tested widget size.
 
 ## RC2 Notes
 
-RC2 is mainly a cleanup, optimization, and language-build release.
-
-Instead of one large Lua file with every language included, RC2 uses separate language-specific builds. This keeps each `main.lua` smaller and lighter on the radio.
-
-RC2 also includes the MultiDash logo image inside each `MultiDash` folder as:
+RC2 is mainly a cleanup, optimization, and language-build release. Instead of one large Lua file with every language included, RC2 uses separate language-specific builds. This keeps each `main.lua` smaller and lighter on the radio. RC2 also includes the MultiDash logo image inside each `MultiDash` folder as:
 
 ```text
 MultiDash/MultiDash.png
@@ -109,25 +96,6 @@ This version also changes how settings save. RC1 was writing settings too often.
 - Chinese Traditional
 
 Each language zip contains a complete `MultiDash` folder.
-
----
-
-## Installation
-
-Download the language zip you want to use.
-
-Copy the entire `MultiDash` folder to your ETHOS scripts/widgets folder.
-
-The folder structure should stay intact:
-
-```text
-MultiDash/
-├── main.lua
-├── MultiDash.png
-└── models/
-```
-
-The `models` folder is included because MultiDash stores per-model settings there.
 
 ---
 
@@ -170,11 +138,7 @@ Post-flight/session status labels include:
 
 MultiDash is still **highly experimental**.
 
-It has not been tested across all ETHOS 26 radios, telemetry systems, receivers, protocols, widget sizes, or model types. Layout, behavior, and configuration options may change in future releases.
-
-Please message me with any issues you run into. Include as much detail as possible, such as your radio model, ETHOS version, receiver/protocol, telemetry sources used, screenshots if available, and steps to reproduce the issue.
-
-Use at your own risk and verify all telemetry values before relying on them.
+It has not been tested across all ETHOS 26 radios, telemetry systems, receivers, protocols, widget sizes, or model types. Layout, behavior, and configuration options may change in future releases. Please message me with any issues you run into. Include as much detail as possible, such as your radio model, ETHOS version, receiver/protocol, telemetry sources used, screenshots if available, and steps to reproduce the issue. Use at your own risk and verify all telemetry values before relying on them.
 
 ---
 
