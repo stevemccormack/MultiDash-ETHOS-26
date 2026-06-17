@@ -8,7 +8,7 @@ It provides configurable live telemetry, battery display, session timing, custom
 
 Theoretically, this dashboard should be able to evolve to work with any protocol on any ETHOS 26 radio.
 
-> **Current status:** MultiDash is still highly experimental. Layout, behavior, and configuration options may change in future releases.
+> **Current status:** MultiDash is still highly experimental. Layout, behavior, and configuration options may change in future releases. Use at your own risk.
 
 ---
 
