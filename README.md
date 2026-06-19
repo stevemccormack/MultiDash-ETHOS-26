@@ -123,7 +123,6 @@ Use at your own risk and verify all telemetry values before relying on them.
 
 MultiDash was created and developed by Steven McCormack.
 
-Inspired by the Rotorflight Suite and DashX by Rob Thomsonv
 This project is experimental and is being developed for FrSky's ETHOS 26. It takes inspiration from Rob Thomson's Lua scripts for Rotorflight and DashX.
 
 ## License
