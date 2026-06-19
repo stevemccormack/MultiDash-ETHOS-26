@@ -1,4 +1,6 @@
-![MultiDash logo](MultiDash/MultiDash.png)
+<p align="center">
+  <img src="MultiDash/MultiDash.png" alt="MultiDash logo" width="360">
+</p>
 
 MultiDash is an experimental telemetry dashboard built specifically for ETHOS 26. It provides configurable live telemetry, battery display, fuel display, session timing, custom telemetry fields, and a post-flight/session summary with min/max statistics and color-coded status feedback. Theoretically, this dashboard should be able to evolve to work with any protocol on any ETHOS 26 radio.
 
@@ -26,15 +28,15 @@ MultiDash has only been tested using the large ETHOS widget size that keeps the 
 
 ### Main Dashboard
 
-Main dashboard
+![Main dashboard](docs/screenshots/main-dashboard.png)
 
 ### In-Flight Dashboard
 
-In-flight dashboard
+![In-flight dashboard](docs/screenshots/in-flight-dashboard.png)
 
 ### Post-Flight Summary
 
-Post-flight summary
+![Post-flight summary](docs/screenshots/post-flight-summary.png)
 
 ## Features
 
@@ -62,12 +64,7 @@ Automatic telemetry detection
 
 ## RC3 Notes
 
-RC3 is mainly a cleanup, optimization, fuel support, and settings-menu refactor release.
-
-RC3 keeps the separate language-specific builds from RC2. Each language zip includes its own complete MultiDash folder and should stay smaller and lighter on the radio. RC3 adds fuel support and fuel percentage support. Fuel mode now has its own gauge layout and fuel threshold settings.
-
-The widget settings menu was also refactored to make it easier to use. Battery and fuel settings are grouped together, link settings are grouped together, telemetry and engine settings are grouped together, and in-flight settings are grouped together. RC3 also removes the old Telemetry Present setting. Telemetry detection is now automatic.
-
+RC3 is mainly a cleanup, optimization, fuel support, and settings-menu refactor release. RC3 keeps the separate language-specific builds from RC2. Each language zip includes its own complete MultiDash folder and should stay smaller and lighter on the radio. RC3 adds fuel support and fuel percentage support. Fuel mode now has its own gauge layout and fuel threshold settings. The widget settings menu was also refactored to make it easier to use. Battery and fuel settings are grouped together, link settings are grouped together, telemetry and engine settings are grouped together, and in-flight settings are grouped together. RC3 also removes the old Telemetry Present setting. Telemetry detection is now automatic.
 
 ## Included RC3 Language Builds
 
@@ -81,8 +78,6 @@ Polish
 Portuguese  
 Chinese Simplified  
 Chinese Traditional
-
-Each language zip contains a complete MultiDash folder.
 
 ## Suggested First Setup
 
@@ -120,11 +115,7 @@ INFO
 
 ## Final Notes / Disclaimer
 
-MultiDash is still highly experimental.
-
-It has not been tested across all ETHOS 26 radios, telemetry systems, receivers, protocols, widget sizes, or model types. Layout, behavior, and configuration options may change in future releases.
-
-Please message me with any issues you run into. Include as much detail as possible, such as your radio model, ETHOS version, receiver/protocol, telemetry sources used, screenshots if available, and steps to reproduce the issue.
+MultiDash is still highly experimental. It has not been tested across all ETHOS 26 radios, telemetry systems, receivers, protocols, widget sizes, or model types. Layout, behavior, and configuration options may change in future releases. Please message me with any issues you run into. Include as much detail as possible, such as your radio model, ETHOS version, receiver/protocol, telemetry sources used, screenshots if available, and steps to reproduce the issue.
 
 Use at your own risk and verify all telemetry values before relying on them.
 
@@ -132,6 +123,7 @@ Use at your own risk and verify all telemetry values before relying on them.
 
 MultiDash was created and developed by Steven McCormack.
 
+Inspired by the Rotorflight Suite and DashX by Rob Thomsonv
 This project is experimental and is being developed for FrSky's ETHOS 26. It takes inspiration from Rob Thomson's Lua scripts for Rotorflight and DashX.
 
 ## License
