@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="MultiDash/MultiDash.png" alt="MultiDash logo" width="280">
+  <img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/MultiDash/MultiDash.png" alt="MultiDash logo" width="280">
 </p>
 
 MultiDash is a configurable telemetry dashboard for FrSky radios running ETHOS 26. It started as a UMX dashboard, but its telemetry fields can be used with TW, ACCESS, ACCST, DSM, and other setups as long as ETHOS can see the sensor.
 
-This first full release includes pre-flight, in-flight, and flight-summary screens with automatic timing and persistent flight counts.
+This release includes pre-flight, in-flight, and flight-summary screens with automatic timing and persistent flight counts.
 
 ## System Requirements
 
@@ -33,9 +33,9 @@ MultiDash is designed for the large ETHOS widget size that keeps the normal syst
     <th>Flight Summary</th>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/pre-flight-tw.png" alt="MultiDash TW pre-flight dashboard" width="260"></td>
-    <td><img src="docs/screenshots/in-flight-tw.png" alt="MultiDash TW in-flight dashboard" width="260"></td>
-    <td><img src="docs/screenshots/post-flight-tw.png alt="MultiDash TW flight summary" width="260"></td>
+    <td><img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/docs/screenshots/pre-flight-tw.png" alt="MultiDash TW pre-flight dashboard" width="260"></td>
+    <td><img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/docs/screenshots/in-flight-tw.png" alt="MultiDash TW in-flight dashboard" width="260"></td>
+    <td><img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/docs/screenshots/post-flight-tw.png" alt="MultiDash TW flight summary" width="260"></td>
   </tr>
 </table>
 
@@ -48,23 +48,23 @@ MultiDash is designed for the large ETHOS widget size that keeps the normal syst
     <th>Flight Summary</th>
   </tr>
   <tr>
-    <td><img src="docs/screenshots/main-dashboard.png" alt="MultiDash UMX main dashboard" width="260"></td>
-    <td><img src="docs/screenshots/in-flight-dashboard.png" alt="MultiDash UMX in-flight dashboard" width="260"></td>
-    <td><img src="./docs/screenshots/post-flight-tw.png" alt="MultiDash TW flight summary" width="260"></td>
+    <td><img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/docs/screenshots/main-dashboard.png" alt="MultiDash UMX main dashboard" width="260"></td>
+    <td><img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/docs/screenshots/in-flight-dashboard.png" alt="MultiDash UMX in-flight dashboard" width="260"></td>
+    <td><img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/docs/screenshots/post-flight-summary.png" alt="MultiDash UMX flight summary" width="260"></td>
   </tr>
 </table>
 
 ### Experimental Fuel Gauge
 
 <p align="center">
-  <img src="docs/screenshots/experimental-fuel-gauge.png" alt="MultiDash experimental fuel gauge" width="420">
+  <img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/docs/screenshots/experimental-fuel-gauge.png" alt="MultiDash experimental fuel gauge" width="420">
 </p>
 
 The fuel gauge is experimental and is intended for a fuel sensor or percentage source that reports from 0 to 100. Battery voltage should use Battery mode instead.
+
 ## Major Features
 
 - Pre-flight, in-flight, and color-coded flight-summary screens
-- Automatic no-telemetry warning
 - Battery tower or dial with automatic percentage calculation
 - 1S through 12S support for LiPo, LiHV, Li-ion, LiFe, and NiCd
 - Separate fuel mode for 0-100% fuel sensors
@@ -109,13 +109,13 @@ Default battery thresholds are per cell:
 
 ## Installation
 
-Download the zip and extract it into the SD card `scripts` directory:
+Download the zip and extract it into the SD card `SCRIPTS` directory:
 
 ```text
-scripts/MultiDash
+SCRIPTS:/MultiDash/
 ```
 
-Model images are selected from `BITMAPS:/models`. Per-model settings are saved under `scripts/MultiDash/models`.
+Model images are selected from `BITMAPS:/models`. Per-model settings are saved under `SCRIPTS:/MultiDash/models`.
 
 Language-default installers and checksums are available in the
 [`release`](release) folder. See the [RC4 release notes](RELEASE_NOTES_RC4.md)
