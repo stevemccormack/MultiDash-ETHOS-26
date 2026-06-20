@@ -69,11 +69,11 @@ RC4 is a major refactor on the entire widget, the way it works and the files. It
 ## Major Changes in RC4
 
 Added universal RC4 install package
-Added Telemetry 4 back to the main screen
-Added Telemetry 4 back to widget settings
-Improved and downsized language system from RC1
-Continued cleanup and optimization
-Minor layout and stability improvements
+ Added Telemetry 4 back to the main screen
+ Added Telemetry 4 back to widget settings
+ Improved and downsized language system from RC1
+ Continued cleanup and optimization
+ Minor layout and stability improvements
 
 ## Included RC3 Language Builds
 
