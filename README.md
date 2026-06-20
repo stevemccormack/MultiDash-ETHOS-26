@@ -101,7 +101,7 @@ Default battery thresholds are per cell:
 Download the zip and extract it into the SD card `scripts` directory:
 
 ```text
-scripts/MultiDash/main.lua
+scripts/MultiDash
 ```
 
 Model images are selected from `BITMAPS:/models`. Per-model settings are saved under `scripts/MultiDash/models`.
