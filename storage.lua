@@ -1,0 +1,1 @@
+local a=assert(loadfile("lazy.lua"))()local b=a.wrap({key="mdash",name="MultiDash",title=false},"widget.lua",{"create","paint","wakeup","configure","read","write","close"},{create=function()return{}end})local function c()system.registerWidget(b)end;return{init=c}
