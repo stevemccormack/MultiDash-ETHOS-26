@@ -50,7 +50,7 @@ MultiDash is designed for the large ETHOS widget size that keeps the normal syst
   <tr>
     <td><img src="docs/screenshots/main-dashboard.png" alt="MultiDash UMX main dashboard" width="260"></td>
     <td><img src="docs/screenshots/in-flight-dashboard.png" alt="MultiDash UMX in-flight dashboard" width="260"></td>
-    <td><img src="docs/screenshots/post-flight-tw.png" alt="MultiDash TW flight summary" width="260"></td>
+    <td><img src="./docs/screenshots/post-flight-tw.png" alt="MultiDash TW flight summary" width="260"></td>
   </tr>
 </table>
 
