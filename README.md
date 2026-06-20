@@ -24,6 +24,12 @@ MultiDash is designed for the large ETHOS widget size that keeps the normal syst
 
 ## Screenshots
 
+### No Telemetry
+
+<p align="center">
+  <img src="docs/screenshots/no-telem.png" alt="MultiDash no telemetry screen" width="520">
+</p>
+
 ### TW Protocol
 
 <table>
