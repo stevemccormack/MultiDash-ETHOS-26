@@ -62,9 +62,18 @@ Separate language builds for smaller Lua files
 Refactored widget settings menu  
 Automatic telemetry detection
 
-## RC3 Notes
+## RC4 Notes
 
-RC3 is mainly a cleanup, optimization, fuel support, and settings-menu refactor release. RC3 keeps the separate language-specific builds from RC2. Each language zip includes its own complete MultiDash folder and should stay smaller and lighter on the radio. RC3 adds fuel support and fuel percentage support. Fuel mode now has its own gauge layout and fuel threshold settings. The widget settings menu was also refactored to make it easier to use. Battery and fuel settings are grouped together, link settings are grouped together, telemetry and engine settings are grouped together, and in-flight settings are grouped together. RC3 also removes the old Telemetry Present setting. Telemetry detection is now automatic.
+RC4 is a major refactor on the entire widget, the way it works and the files. It now consists of multiple smaller files instead of one large one. Languages can be found at the far bottom of the widget settings.
+
+## Major Changes in RC4
+
+Added universal RC4 install package
+Added Telemetry 4 back to the main screen
+Added Telemetry 4 back to widget settings
+Improved and downsized language system from RC1
+Continued cleanup and optimization
+Minor layout and stability improvements
 
 ## Included RC3 Language Builds
 
