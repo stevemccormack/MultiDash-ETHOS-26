@@ -24,32 +24,43 @@ MultiDash is designed for the large ETHOS widget size that keeps the normal syst
 
 ## Screenshots
 
-### Pre-Flight Dashboard - TW Protocol
+### TW Protocol
 
-<p align="center">
-  <img src="docs/screenshots/pre-flight-tw.png" alt="MultiDash pre-flight dashboard using TW telemetry" width="520">
-</p>
+<table>
+  <tr>
+    <th>Pre-Flight</th>
+    <th>In-Flight</th>
+    <th>Flight Summary</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/pre-flight-tw.png" alt="MultiDash TW pre-flight dashboard" width="260"></td>
+    <td><img src="docs/screenshots/in-flight-tw.png" alt="MultiDash TW in-flight dashboard" width="260"></td>
+    <td><img src="docs/screenshots/post-flight-tw.png" alt="MultiDash TW flight summary" width="260"></td>
+  </tr>
+</table>
 
-### In-Flight Dashboard - TW Protocol
+### UMX / DSM Telemetry
 
-<p align="center">
-  <img src="docs/screenshots/in-flight-tw.png" alt="MultiDash in-flight dashboard using TW telemetry" width="520">
-</p>
-
-### UMX-DSM Telemetry Example
-
-<p align="center">
-  <img src="docs/screenshots/umx-dsm-telemetry.png" alt="MultiDash UMX and DSM telemetry example" width="520">
-</p>
+<table>
+  <tr>
+    <th>Main Dashboard</th>
+    <th>In-Flight</th>
+    <th>Flight Summary</th>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/main-dashboard.png" alt="MultiDash UMX main dashboard" width="260"></td>
+    <td><img src="docs/screenshots/in-flight-dashboard.png" alt="MultiDash UMX in-flight dashboard" width="260"></td>
+    <td><img src="docs/screenshots/post-flight-summary.png" alt="MultiDash UMX flight summary" width="260"></td>
+  </tr>
+</table>
 
 ### Experimental Fuel Gauge
 
 <p align="center">
-  <img src="docs/screenshots/experimental-fuel-gauge.png" alt="MultiDash experimental fuel gauge" width="520">
+  <img src="docs/screenshots/experimental-fuel-gauge.png" alt="MultiDash experimental fuel gauge" width="420">
 </p>
 
 The fuel gauge is experimental and is intended for a fuel sensor or percentage source that reports from 0 to 100. Battery voltage should use Battery mode instead.
-
 ## Major Features
 
 - Pre-flight, in-flight, and color-coded flight-summary screens
