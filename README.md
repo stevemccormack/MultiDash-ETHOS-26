@@ -67,9 +67,9 @@ The fuel gauge is experimental and is intended for a fuel sensor or percentage s
 
 Flights lasting at least 15 seconds are added to the flight counter. The count can also be edited in widget settings.
 
-## OtherTelemetry
+## Other Telemetry
 
-MultiDash started as a dashboard for UMX aircraft and can be set up around DSM and Flight Log telemetry. Available sensors depend on the aircraft, receiver, and external module.
+MultiDash started as a dashboard for UMX aircraft and can be set up around DSM and MultiModule telemetry. Available sensors depend on the aircraft, receiver, and external module.
 
 Assign any field to the link source or Telemetry 1-4. MultiDash uses the sensor name and records its minimum and maximum values. Threshold direction is adjustable because RSSI and VFR are high-is-good, while frame losses, fades, and holds are low-is-good.
 
