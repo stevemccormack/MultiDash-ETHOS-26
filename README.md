@@ -98,8 +98,7 @@ Default battery thresholds are per cell:
 
 ## Installation
 
-Download the [universal installer](release/MultiDash_RC4_universal_install.zip)
-and extract it into the SD card `scripts` directory:
+Download the zip and extract it into the SD card `scripts` directory:
 
 ```text
 scripts/MultiDash/main.lua
