@@ -63,7 +63,7 @@ MultiDash is designed for the large ETHOS widget size that keeps the normal syst
 ### Experimental Fuel Gauge
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/docs/screenshots/experimental-fuel-gauge.png" alt="MultiDash experimental fuel gauge" width="420">
+  <img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/docs/screenshots/experimental-fuel-gauge-on.png" alt="MultiDash experimental fuel gauge" width="420">
 </p>
 
 The fuel gauge is experimental and is intended for a fuel sensor or percentage source that reports from 0 to 100. Battery voltage should use Battery mode instead.
