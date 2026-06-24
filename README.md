@@ -125,10 +125,6 @@ Use the Single Large Widget size. Other widget sizes will show the size warning.
 
 Model images are selected from `BITMAPS:/models`. Per-model settings are saved under `SCRIPTS:/MultiDash/models`.
 
-Language-default installers and checksums are available in the
-[`release`](release) folder. See the [RC4 release notes](RELEASE_NOTES_RC4.md)
-for a short summary.
-
 ## Languages
 
 English, German, Spanish, French, Italian, Polish, Portuguese, Chinese Simplified, and Chinese Traditional.
