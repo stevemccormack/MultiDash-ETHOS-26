@@ -2,13 +2,13 @@
   <img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/MultiDash/MultiDash.png" alt="MultiDash logo" width="280">
 </p>
 
-MultiDash is a configurable telemetry dashboard for FrSky radios running ETHOS 26. It started as a UMX dashboard, but its telemetry fields can be used with TW, ACCESS, ACCST, DSM, and other setups as long as ETHOS can see the sensor.
+MultiDash is a configurable telemetry dashboard for FrSky ETHOS 1.6 and higher. It started as a UMX dashboard, but its telemetry fields can be used with TW, ACCESS, ACCST, DSM, and other setups as long as ETHOS can see the sensor.
 
 This release includes pre-flight, in-flight, and flight-summary screens with automatic timing and persistent flight counts.
 
 ## System Requirements
 
-ETHOS 26.1.0 RC4 or later
+ETHOS 1.6 or Newer
 
 ## Tested Hardware
 
@@ -113,11 +113,15 @@ Default battery thresholds are per cell:
 
 ## Installation
 
-Download the zip and extract it into the SD card `SCRIPTS` directory:
+For ETHOS Suite / installer use:
+release/MultiDash_ETHOS_installer.zip
 
-```text
-SCRIPTS:/MultiDash/
-```
+For manual SD card install use:
+release/MultiDash_manual_install.zip
+
+The final path must be for manual install:
+SCRIPTS:/MultiDash
+Use the Single Large Widget size. Other widget sizes will show the size warning.
 
 Model images are selected from `BITMAPS:/models`. Per-model settings are saved under `SCRIPTS:/MultiDash/models`.
 
