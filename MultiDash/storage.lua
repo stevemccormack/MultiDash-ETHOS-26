@@ -1,1 +1,165 @@
-local a={battery="batterySource",link="rssiSource",field1="field1Source",field2="field2Source",field3="field3Source",field4="field4Source",telemetry4="telemetry4Source",inFlight1="inFlight1Source",inFlight2="inFlight2Source",inFlight3="inFlight3Source",inFlight4="inFlight4Source",current="currentSource",rpm="rpmSource"}local b={"battery","link","field1","field2","field3","field4","telemetry4","inFlight1","inFlight2","inFlight3","inFlight4","current","rpm"}local c={"batt","fuel","link","current","field1","field2","field3","field4"}local d={"High","Mid","Low","Mode"}local e={"name","id","label","toString","stringValue"}local function f(g,h,i)if g<h then return h end;if g>i then return i end;return g end;local function j()local k=model and type(model.name)=="function"and model.name()or"default"return(k or"default"):gsub("%W","_")end;local function l(m)local n=type(m)if n=="string"or n=="number"then return tostring(m)end;if not m then return""end;for o=1,#e do local p=m[e[o]]if type(p)=="function"then local q,r=pcall(p,m)if q and r~=nil and tostring(r)~=""then return tostring(r)end elseif type(p)=="string"or type(p)=="number"then return tostring(p)end end;return tostring(m):match("S[A-H]")or""end;local function s(t,p)local q,r=pcall(t,p)return q and r or nil end;local function u(v,p)if not p or p==""or not system or type(system[v])~="function"then return nil end;local t=system[v]local w=tostring(p)local x=w:match("S[A-H]")or w:match("s[a-h]")return s(t,p)or s(t,w:upper())or s(t,w:lower())or x and(s(t,x:upper())or s(t,x:lower()))end;local function y(z,A,p)z[A]=p and u("getSource",p)or nil end;local function B(z,C)if not z then return true end;local D=io.open("SCRIPTS:/MultiDash/models/"..j()..".cfg","w")if not D then return false end;local q=pcall(function()for o=1,#b do local E=b[o]D:write(E,"=",l(z[a[E]]),"\n")end;D:write("arm=",z.armSwitchKey or l(z.armSwitch),"\n")D:write("armReverse=",tostring(z.armSwitchReverse or 1),"\n")D:write("armDelay=",tostring(z.armDelay or 5),"\n")D:write("inFlightScreen=",tostring(z.inFlightScreen or 1),"\n")D:write("image=",z.imageFile or"","\n")D:write("cells=",tostring(z.cellCount or 0),"\n")D:write("batteryType=",tostring(z.batteryType or 1),"\n")D:write("theme=",tostring(z.themeMode or 1),"\n")D:write("batteryStyle=",tostring(z.batteryStyle or 1),"\n")D:write("powerSourceType=",tostring(z.powerSourceType or 1),"\n")D:write("fuelShowPercent=",tostring(z.fuelShowPercent or 1),"\n")D:write("flightCount=",tostring(z.flightCount or 0),"\n")D:write("language=",C(z.language),"\n")for o=1,#c do local A=c[o]for F=1,#d do local G=d[F]local p=z[A..G]if p~=nil then D:write(A,G,"=",tostring(p),"\n")end end end end)pcall(D.close,D)return q end;local function H(z)if z.battHigh==3.9 and z.battMid==3.7 and z.battLow==3.5 then z.battHigh,z.battMid,z.battLow=4.15,3.75,3.45 end;z.battHigh=f(z.battHigh or 4.15,0,4.35)z.battMid=f(z.battMid or 3.75,0,4.35)z.battLow=f(z.battLow or 3.45,0,4.35)z.fuelHigh=f(z.fuelHigh or 40,0,100)z.fuelMid=f(z.fuelMid or 20,0,100)if(z.field4High or 0)==0 and(z.field4Mid or 0)==0 then z.field4High,z.field4Mid=80,30 end end;local function I(z,C)if not z then return true end;local A=j()local D=io.open("SCRIPTS:/MultiDash/models/"..A..".cfg","r")if not D then D=io.open("SCRIPTS:/MultiDash_"..A..".cfg","r")end;if D then while true do local q,J=pcall(D.read,D,"*l")if not q or not J then break end;local k,p=J:match("^(%w+)=(.*)$")if k then p=p:gsub("^%s+",""):gsub("%s+$","")if p==""then p=nil end;if a[k]then y(z,a[k],p)elseif k=="arm"then z.armSwitchKey=p;z.armSwitch=u("getSwitch",p)or u("getSource",p)elseif k=="image"then z.imageFile=p elseif k=="language"then z.language=C(p)else local K=tonumber(p)if K then if k=="armReverse"then z.armSwitchReverse=K==2 and 2 or 1 elseif k=="armDelay"then z.armDelay=f(K,0,60)elseif k=="inFlightScreen"then z.inFlightScreen=K==2 and 2 or 1 elseif k=="cells"then z.cellCount=f(math.floor(K),0,12)elseif k=="batteryType"then z.batteryType=f(math.floor(K),1,5)elseif k=="theme"then z.themeMode=K==2 and 2 or 1 elseif k=="batteryStyle"then z.batteryStyle=K==2 and 2 or 1 elseif k=="powerSourceType"then z.powerSourceType=K==2 and 2 or 1 elseif k=="fuelShowPercent"then z.fuelShowPercent=K==2 and 2 or 1 elseif k=="flightCount"then z.flightCount=f(math.floor(K),0,9999)elseif z[k]~=nil then z[k]=K end end end end end;pcall(D.close,D)end;H(z)z.selectedBmp,z.selectedFile,z.iconBmp,z.iconLoaded=nil,nil,nil,false;return true end;return{read=I,write=B}
+local sourceKeys = {
+  battery = "batterySource",
+  link = "rssiSource",
+  field1 = "field1Source",
+  field2 = "field2Source",
+  field3 = "field3Source",
+  field4 = "field4Source",
+  telemetry4 = "telemetry4Source",
+  inFlight1 = "inFlight1Source",
+  inFlight2 = "inFlight2Source",
+  inFlight3 = "inFlight3Source",
+  inFlight4 = "inFlight4Source",
+  current = "currentSource",
+  rpm = "rpmSource",
+}
+local sourceOrder = {
+  "battery", "link", "field1", "field2", "field3", "field4", "telemetry4",
+  "inFlight1", "inFlight2", "inFlight3", "inFlight4", "current", "rpm",
+}
+local thresholdKeys = {"batt", "fuel", "link", "current", "field1", "field2", "field3", "field4"}
+local thresholdSuffixes = {"High", "Mid", "Low", "Mode"}
+local objectProps = {"name", "id", "label", "toString", "stringValue"}
+
+local function clamp(v, lo, hi)
+  if v < lo then return lo end
+  if v > hi then return hi end
+  return v
+end
+
+local function modelKey()
+  local name = model and type(model.name) == "function" and model.name() or "default"
+  return (name or "default"):gsub("%W", "_")
+end
+
+local function objectKey(obj)
+  local kind = type(obj)
+  if kind == "string" or kind == "number" then return tostring(obj) end
+  if not obj then return "" end
+  for i = 1, #objectProps do
+    local value = obj[objectProps[i]]
+    if type(value) == "function" then
+      local ok, result = pcall(value, obj)
+      if ok and result ~= nil and tostring(result) ~= "" then return tostring(result) end
+    elseif type(value) == "string" or type(value) == "number" then
+      return tostring(value)
+    end
+  end
+  return tostring(obj):match("S[A-H]") or ""
+end
+
+local function callResolver(fn, value)
+  local ok, result = pcall(fn, value)
+  return ok and result or nil
+end
+
+local function resolve(method, value)
+  if not value or value == "" or not system or type(system[method]) ~= "function" then return nil end
+  local fn = system[method]
+  local text = tostring(value)
+  local base = text:match("S[A-H]") or text:match("s[a-h]")
+  return callResolver(fn, value) or callResolver(fn, text:upper()) or callResolver(fn, text:lower())
+    or (base and (callResolver(fn, base:upper()) or callResolver(fn, base:lower())))
+end
+
+local function assignSource(w, key, value)
+  w[key] = value and resolve("getSource", value) or nil
+end
+
+local function write(w, validLanguage)
+  if not w then return true end
+  local file = io.open("SCRIPTS:/MultiDash/models/" .. modelKey() .. ".cfg", "w")
+  if not file then return false end
+  local ok = pcall(function()
+    for i = 1, #sourceOrder do
+      local saved = sourceOrder[i]
+      file:write(saved, "=", objectKey(w[sourceKeys[saved]]), "\n")
+    end
+    file:write("arm=", w.armSwitchKey or objectKey(w.armSwitch), "\n")
+    file:write("armReverse=", tostring(w.armSwitchReverse or 1), "\n")
+    file:write("armDelay=", tostring(w.armDelay or 5), "\n")
+    file:write("inFlightScreen=", tostring(w.inFlightScreen or 1), "\n")
+    file:write("image=", w.imageFile or "", "\n")
+    file:write("cells=", tostring(w.cellCount or 0), "\n")
+    file:write("batteryType=", tostring(w.batteryType or 1), "\n")
+    file:write("theme=", tostring(w.themeMode or 1), "\n")
+    file:write("batteryStyle=", tostring(w.batteryStyle or 1), "\n")
+    file:write("powerSourceType=", tostring(w.powerSourceType or 1), "\n")
+    file:write("fuelShowPercent=", tostring(w.fuelShowPercent or 1), "\n")
+    file:write("flightCount=", tostring(w.flightCount or 0), "\n")
+    file:write("language=", validLanguage(w.language), "\n")
+    for i = 1, #thresholdKeys do
+      local key = thresholdKeys[i]
+      for j = 1, #thresholdSuffixes do
+        local suffix = thresholdSuffixes[j]
+        local value = w[key .. suffix]
+        if value ~= nil then file:write(key, suffix, "=", tostring(value), "\n") end
+      end
+    end
+  end)
+  pcall(file.close, file)
+  return ok
+end
+
+local function normalize(w)
+  if w.battHigh == 3.9 and w.battMid == 3.7 and w.battLow == 3.5 then
+    w.battHigh, w.battMid, w.battLow = 4.15, 3.75, 3.45
+  end
+  w.battHigh = clamp(w.battHigh or 4.15, 0, 4.35)
+  w.battMid = clamp(w.battMid or 3.75, 0, 4.35)
+  w.battLow = clamp(w.battLow or 3.45, 0, 4.35)
+  w.fuelHigh = clamp(w.fuelHigh or 40, 0, 100)
+  w.fuelMid = clamp(w.fuelMid or 20, 0, 100)
+  if (w.field4High or 0) == 0 and (w.field4Mid or 0) == 0 then
+    w.field4High, w.field4Mid = 80, 30
+  end
+end
+
+local function read(w, validLanguage)
+  if not w then return true end
+  local key = modelKey()
+  local file = io.open("SCRIPTS:/MultiDash/models/" .. key .. ".cfg", "r")
+  if not file then file = io.open("SCRIPTS:/MultiDash_" .. key .. ".cfg", "r") end
+  if file then
+    while true do
+      local ok, line = pcall(file.read, file, "*l")
+      if not ok or not line then break end
+      local name, value = line:match("^(%w+)=(.*)$")
+      if name then
+        value = value:gsub("^%s+", ""):gsub("%s+$", "")
+        if value == "" then value = nil end
+        if sourceKeys[name] then
+          assignSource(w, sourceKeys[name], value)
+        elseif name == "arm" then
+          w.armSwitchKey = value
+          w.armSwitch = resolve("getSwitch", value) or resolve("getSource", value)
+        elseif name == "image" then
+          w.imageFile = value
+        elseif name == "language" then
+          w.language = validLanguage(value)
+        else
+          local n = tonumber(value)
+          if n then
+            if name == "armReverse" then w.armSwitchReverse = n == 2 and 2 or 1
+            elseif name == "armDelay" then w.armDelay = clamp(n, 0, 60)
+            elseif name == "inFlightScreen" then w.inFlightScreen = n == 2 and 2 or 1
+            elseif name == "cells" then w.cellCount = clamp(math.floor(n), 0, 12)
+            elseif name == "batteryType" then w.batteryType = clamp(math.floor(n), 1, 5)
+            elseif name == "theme" then w.themeMode = n == 2 and 2 or 1
+            elseif name == "batteryStyle" then w.batteryStyle = n == 2 and 2 or 1
+            elseif name == "powerSourceType" then w.powerSourceType = n == 2 and 2 or 1
+            elseif name == "fuelShowPercent" then w.fuelShowPercent = n == 2 and 2 or 1
+            elseif name == "flightCount" then w.flightCount = clamp(math.floor(n), 0, 9999)
+            elseif w[name] ~= nil then w[name] = n end
+          end
+        end
+      end
+    end
+    pcall(file.close, file)
+  end
+  normalize(w)
+  w.selectedBmp, w.selectedFile, w.iconBmp, w.iconLoaded = nil, nil, nil, false
+  return true
+end
+
+return {read = read, write = write}

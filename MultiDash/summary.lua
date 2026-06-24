@@ -1,1 +1,112 @@
-local function a(b,c,d,e,f,g)local h,i=g.px,g.getTextW;local j=function(k)return g.tr(b,k)end;lcd.color(c.bg)lcd.drawFilledRectangle(0,0,e,f)local l=tonumber(b.themeMode)==2;local m=l and lcd.RGB(224,229,236)or lcd.RGB(29,34,40)local n=l and lcd.RGB(210,218,228)or lcd.RGB(39,47,56)local o=l and lcd.RGB(232,236,241)or lcd.RGB(24,29,35)local p=l and lcd.RGB(150,160,172)or lcd.RGB(72,84,96)local q=h(9,d,4,math.floor(e*0.03))local r=h(10,d,5,14)local s=h(8,d,4,10)local t=h(6,d,2,10)local u=h(58,d,40,68)local v=e-q*2;local w=h(1,d,1,2)local function x(y,z,A,B)lcd.color(B)lcd.drawText(z,A,y)lcd.drawText(z+w,A,y)end;local function C(y,D,A,B)x(y,D-(i(y)or 0),A,B)end;g.roundPanel(q,t,v,u,s,n,p)g.setFontSize("large",d)local E="Flights: "..tostring(math.floor(tonumber(b.flightCount)or 0))local F=t+h(7,d,3,10)x(E,q+r,F,c.text)g.setFontSize("huge",d)C(g.formatTime(b.flightTime or 0),e-q-r,t+h(3,d,1,8),c.text)if not b.statOrder or#b.statOrder==0 then g.setFontSize("large",d)x(j("No flight stats captured"),q+r,t+u+h(28,d,16,38),c.muted)return end;local G=t+u+h(7,d,4,10)local H=f-h(5,d,2,8)local I=h(32,d,22,38)local J=#b.statOrder;local K=H-G-I;if K<J then return end;local L=math.max(20,math.floor(K/J))local M=I+L*J;local N=h(138,d,108,math.floor(v*0.26))local O=h(124,d,78,math.floor(v*0.22))local P=q+r+h(8,d,4,10)local Q=q+v-N;local R=Q-O;local S=R-O;local T=S-P-r;g.roundPanel(q,G,v,M,s,m,p)lcd.color(n)lcd.drawFilledRectangle(q+1,G+s,v-2,I-s)lcd.drawFilledRectangle(q+s,G+1,v-s*2,I)g.setFontSize("small",d)local U=G+h(8,d,3,10)x(j("Sensor"),P,U,c.text)C(j("Min"),S+O-r,U,c.text)C(j("Max"),R+O-r,U,c.text)x(j("Status"),Q+r,U,c.text)local A=G+I;local V=0;local function W(k)local X=b.stats[k]if not X then return end;V=V+1;if V%2==0 then lcd.color(o)lcd.drawFilledRectangle(q+1,A,v-2,L)end;local B,Y=g.statStatus(b,k,X,c)local Z=h(4,d,2,6)local _=h(7,d,4,10)local a0=A+math.max(1,math.floor((L-h(22,d,14,28))/2))lcd.color(B)lcd.drawFilledRectangle(q+1,A+1,_,L-1)g.setFontSize(L>=h(31,d,22,36)and"large"or"small",d)x(g.fitText(X.label,T),P,a0,c.text)local a1,a2=g.formatValue(X.min),g.formatValue(X.max)if k=="fuel"or k=="field4"then a1,a2=a1 .."%",a2 .."%"end;if i(a2)>O-r or i(a1)>O-r then g.setFontSize("small",d)end;C(a1,S+O-r,a0,c.text)C(a2,R+O-r,a0,c.text)g.setFontSize(L>=h(31,d,22,36)and"large"or"small",d)local a3,a4=Q+Z,A+Z;local a5,a6=N-Z*2,L-Z*2;g.roundPanel(a3,a4,a5,a6,math.min(s,math.floor(a6/2)),c.bg,B)Y=g.fitText(j(Y),a5-r*2)lcd.color(B)lcd.drawText(a3+math.floor((a5-(i(Y)or 0))/2),a0-h(7,d,4,9),Y)lcd.color(p)lcd.drawFilledRectangle(q+1,A+L-1,v-2,1)A=A+L end;for a7=1,#b.statOrder do if b.statOrder[a7]~="rpm"then W(b.statOrder[a7])end end;if b.stats.rpm then W("rpm")end end;return{draw=a}
+local function draw(w, c, scale, scrW, scrH, api)
+  local px, textW = api.px, api.getTextW
+  local T = function(key) return api.tr(w, key) end
+  lcd.color(c.bg)
+  lcd.drawFilledRectangle(0, 0, scrW, scrH)
+
+  local light = tonumber(w.themeMode) == 2
+  local panel = light and lcd.RGB(224, 229, 236) or lcd.RGB(29, 34, 40)
+  local header = light and lcd.RGB(210, 218, 228) or lcd.RGB(39, 47, 56)
+  local alternate = light and lcd.RGB(232, 236, 241) or lcd.RGB(24, 29, 35)
+  local grid = light and lcd.RGB(150, 160, 172) or lcd.RGB(72, 84, 96)
+  local margin = px(9, scale, 4, math.floor(scrW * 0.03))
+  local pad = px(10, scale, 5, 14)
+  local radius = px(8, scale, 4, 10)
+  local headerY = px(6, scale, 2, 10)
+  local headerH = px(58, scale, 40, 68)
+  local width = scrW - margin * 2
+  local bold = px(1, scale, 1, 2)
+
+  local function boldText(text, x, y, color)
+    lcd.color(color)
+    lcd.drawText(x, y, text)
+    lcd.drawText(x + bold, y, text)
+  end
+
+  local function boldRight(text, right, y, color)
+    boldText(text, right - (textW(text) or 0), y, color)
+  end
+
+  api.roundPanel(margin, headerY, width, headerH, radius, header, grid)
+  api.setFontSize("large", scale)
+  local title = "Flights: " .. tostring(math.floor(tonumber(w.flightCount) or 0))
+  local titleY = headerY + px(7, scale, 3, 10)
+  boldText(title, margin + pad, titleY, c.text)
+  api.setFontSize("huge", scale)
+  boldRight(api.formatTime(w.flightTime or 0), scrW - margin - pad, headerY + px(3, scale, 1, 8), c.text)
+
+  if not w.statOrder or #w.statOrder == 0 then
+    api.setFontSize("large", scale)
+    boldText(T("No flight stats captured"), margin + pad, headerY + headerH + px(28, scale, 16, 38), c.muted)
+    return
+  end
+
+  local tableY = headerY + headerH + px(7, scale, 4, 10)
+  local bottom = scrH - px(5, scale, 2, 8)
+  local headerRowH = px(32, scale, 22, 38)
+  local rows = #w.statOrder
+  local usable = bottom - tableY - headerRowH
+  if usable < rows then return end
+  local rowH = math.max(20, math.floor(usable / rows))
+  local tableH = headerRowH + rowH * rows
+  local statusW = px(138, scale, 108, math.floor(width * 0.26))
+  local valueW = px(124, scale, 78, math.floor(width * 0.22))
+  local xName = margin + pad + px(8, scale, 4, 10)
+  local xStatus = margin + width - statusW
+  local xMax = xStatus - valueW
+  local xMin = xMax - valueW
+  local nameW = xMin - xName - pad
+
+  api.roundPanel(margin, tableY, width, tableH, radius, panel, grid)
+  lcd.color(header)
+  lcd.drawFilledRectangle(margin + 1, tableY + radius, width - 2, headerRowH - radius)
+  lcd.drawFilledRectangle(margin + radius, tableY + 1, width - radius * 2, headerRowH)
+  api.setFontSize("small", scale)
+  local labelY = tableY + px(8, scale, 3, 10)
+  boldText(T("Sensor"), xName, labelY, c.text)
+  boldRight(T("Min"), xMin + valueW - pad, labelY, c.text)
+  boldRight(T("Max"), xMax + valueW - pad, labelY, c.text)
+  boldText(T("Status"), xStatus + pad, labelY, c.text)
+
+  local y = tableY + headerRowH
+  local rowIndex = 0
+  local function row(key)
+    local stat = w.stats[key]
+    if not stat then return end
+    rowIndex = rowIndex + 1
+    if rowIndex % 2 == 0 then
+      lcd.color(alternate)
+      lcd.drawFilledRectangle(margin + 1, y, width - 2, rowH)
+    end
+    local color, status = api.statStatus(w, key, stat, c)
+    local inset = px(4, scale, 2, 6)
+    local stripW = px(7, scale, 4, 10)
+    local textY = y + math.max(1, math.floor((rowH - px(22, scale, 14, 28)) / 2))
+    lcd.color(color)
+    lcd.drawFilledRectangle(margin + 1, y + 1, stripW, rowH - 1)
+    api.setFontSize(rowH >= px(31, scale, 22, 36) and "large" or "small", scale)
+    boldText(api.fitText(stat.label, nameW), xName, textY, c.text)
+    local minText, maxText = api.formatValue(stat.min), api.formatValue(stat.max)
+    if key == "fuel" or key == "field4" then minText, maxText = minText .. "%", maxText .. "%" end
+    if textW(maxText) > valueW - pad or textW(minText) > valueW - pad then api.setFontSize("small", scale) end
+    boldRight(minText, xMin + valueW - pad, textY, c.text)
+    boldRight(maxText, xMax + valueW - pad, textY, c.text)
+    api.setFontSize(rowH >= px(31, scale, 22, 36) and "large" or "small", scale)
+    local badgeX, badgeY = xStatus + inset, y + inset
+    local badgeW, badgeH = statusW - inset * 2, rowH - inset * 2
+    api.roundPanel(badgeX, badgeY, badgeW, badgeH, math.min(radius, math.floor(badgeH / 2)), c.bg, color)
+    status = api.fitText(T(status), badgeW - pad * 2)
+    lcd.color(color)
+    lcd.drawText(badgeX + math.floor((badgeW - (textW(status) or 0)) / 2), textY - px(7, scale, 4, 9), status)
+    lcd.color(grid)
+    lcd.drawFilledRectangle(margin + 1, y + rowH - 1, width - 2, 1)
+    y = y + rowH
+  end
+
+  for i = 1, #w.statOrder do
+    if w.statOrder[i] ~= "rpm" then row(w.statOrder[i]) end
+  end
+  if w.stats.rpm then row("rpm") end
+end
+
+return {draw = draw}

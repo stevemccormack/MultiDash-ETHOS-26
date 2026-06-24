@@ -1,1 +1,53 @@
-local a={"en","de","es","fr","it","pl","pt","zh_cn","zh_tw"}local b="en"local c;local d;local e=loadfile("default_lang.lua")if e then local f,g=pcall(e)if f and type(g)=="string"then b=g end end;local function h(g)local i=tonumber(g)if i then return a[math.max(1,math.min(#a,math.floor(i)))]end;for j=1,#a do if a[j]==g then return g end end;return b end;local function k(g)g=h(g)if c==g and d then return d end;local l=loadfile("lang/"..g..".lua")local m={}if l then local f,n=pcall(l)if f and type(n)=="table"then m=n end end;c=g;d=m;return m end;local function o(p,q)local m=k(p and p.language or b)local r=m[q]if type(r)=="string"and r~=""then return r end;if c~="en"then local l=loadfile("lang/en.lua")if l then local f,s=pcall(l)r=f and type(s)=="table"and s[q]if type(r)=="string"and r~=""then return r end end end;return q end;return{codes=a,default=function()return h(b)end,valid=h,text=o}
+local codes = {
+  "en", "de", "es", "fr", "it", "pl", "pt", "zh_cn", "zh_tw",
+}
+local defaultCode = "en"
+local currentCode
+local current
+
+local function valid(code)
+  local legacyIndex = tonumber(code)
+  if legacyIndex then
+    return codes[math.max(1, math.min(#codes, math.floor(legacyIndex)))]
+  end
+  for i = 1, #codes do
+    if codes[i] == code then return code end
+  end
+  return defaultCode
+end
+
+local function load(code)
+  code = valid(code)
+  if currentCode == code and current then return current end
+  local chunk = loadfile("lang/" .. code .. ".lua")
+  local labels = {}
+  if chunk then
+    local ok, result = pcall(chunk)
+    if ok and type(result) == "table" then labels = result end
+  end
+  currentCode = code
+  current = labels
+  return labels
+end
+
+local function text(widget, key)
+  local labels = load(widget and widget.language or defaultCode)
+  local value = labels[key]
+  if type(value) == "string" and value ~= "" then return value end
+  if currentCode ~= "en" then
+    local chunk = loadfile("lang/en.lua")
+    if chunk then
+      local ok, fallback = pcall(chunk)
+      value = ok and type(fallback) == "table" and fallback[key]
+      if type(value) == "string" and value ~= "" then return value end
+    end
+  end
+  return key
+end
+
+return {
+  codes = codes,
+  default = function() return valid(defaultCode) end,
+  valid = valid,
+  text = text,
+}

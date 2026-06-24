@@ -1,1 +1,204 @@
-local function a(b,c)local d=c.clamp;local e=function(f)return c.tr(b,f)end;local g={"Off","SA","SB","SC","SD","SE","SF","SG","SH"}local h={"LiPo","LiHV","Li-ion","LiFe","NiCd"}local i={"English","Deutsch","Espanol","Francais","Italiano","Polski","Portugues","Zhongwen Jianti","Zhongwen Fanti"}local function j(k)for l=1,#c.languageCodes do if c.languageCodes[l]==k then return l end end;return 1 end;local function m(n)return function(o)n(o)b.dirty,b.dirtyAt=true,os.clock()end end;local function p()local f=b.armSwitchKey;if not f and b.armSwitch then if type(b.armSwitch.name)=="function"then local q,r=pcall(b.armSwitch.name,b.armSwitch)if q then f=r end end;f=f or tostring(b.armSwitch)end;f=f and(tostring(f):match("S[A-H]")or tostring(f):match("s[a-h]"))f=f and f:upper()or""for l=1,#g do if g[l]==f then return l end end;return 1 end;local function s(o)local f=g[d(math.floor(tonumber(o)or 1),1,#g)]if f=="Off"then b.armSwitchKey,b.armSwitch=nil,nil else b.armSwitchKey,b.armSwitch=f,c.resolveSwitch(f)end end;local function t(u,v,w,x,y,z)if not form.addNumberField then return end;local A=z or 0;local B=10^A;local C,D=v,w;local E,F=x,m(y)if A>0 then C,D=math.floor(v*B+0.5),math.floor(w*B+0.5)E=function()return math.floor((tonumber(x())or 0)*B+0.5)end;F=m(function(o)y((tonumber(o)or 0)/B)end)end;local G=form.addLine(u)local H=form.addNumberField(G,nil,C,D,E,F)if H and type(H.decimals)=="function"then H:decimals(A)end end;local function I(u,J,x,y)local K={}for l=1,#J do K[l]={J[l],l}end;local n=m(y)local G;if form.addChoiceField then G=form.addLine(u)if pcall(form.addChoiceField,G,nil,K,x,n)then return end;if pcall(form.addChoiceField,G,nil,J,x,n)then return end;if pcall(form.addChoiceField,G,K,x,n)then return end;if pcall(form.addChoiceField,G,J,x,n)then return end end;if form.addSelectField then if not G then G=form.addLine(u)end;if pcall(form.addSelectField,G,nil,K,x,n)then return end;if pcall(form.addSelectField,G,nil,J,x,n)then return end;if pcall(form.addSelectField,G,K,x,n)then return end;if pcall(form.addSelectField,G,J,x,n)then return end end;t(u,1,#J,x,y,0)end;local function L(u,f,M)local G=form.addLine(e(u))form.addSourceField(G,nil,function()return b[f]end,m(function(o)b[f]=o;if M then b.detectedCells=nil end end))end;local function N(O,u,z,P)local w=P or 10000;local function H(Q)t(e(u).." "..e(Q),0,w,function()return b[O..Q:sub(1,1):upper()..Q:sub(2)]end,function(o)b[O..Q:sub(1,1):upper()..Q:sub(2)]=d(tonumber(o)or 0,0,w)end,z)end;H("high")H("mid")if O=="batt"then H("low")end;if b[O.."Mode"]~=nil then I(e(u).." "..e("scoring"),{e("High is good"),e("Low is good")},function()return b[O.."Mode"]end,function(o)b[O.."Mode"]=tonumber(o)==2 and 2 or 1 end)end end;local G=form.addLine(e("Image"))if form.addFileField then form.addFileField(G,nil,"BITMAPS:/models","image+ext",function()return b.imageFile and b.imageFile:match("[^/]+$")or""end,m(function(o)b.imageFile=o and o~=""and"BITMAPS:/models/"..o or nil;b.selectedBmp,b.selectedFile=nil,nil end))end;form.addLine(e("Display / Arm"))I(e("Theme"),{e("Dark"),e("Light")},function()return b.themeMode or 1 end,function(o)b.themeMode=tonumber(o)==2 and 2 or 1 end)I(e("Arm switch"),g,p,s)I(e("Arm switch direction"),{e("Normal"),e("Reversed")},function()return b.armSwitchReverse or 1 end,function(o)b.armSwitchReverse=tonumber(o)==2 and 2 or 1 end)t(e("Arming delay"),0,60,function()return b.armDelay or 5 end,function(o)b.armDelay=d(tonumber(o)or 0,0,60)end,0)t("Flights",0,9999,function()return b.flightCount or 0 end,function(o)b.flightCount=d(math.floor(tonumber(o)or 0),0,9999)end,0)form.addLine(e("Power / Battery / Fuel"))I(e("Power Source Type"),{e("Battery"),e("Fuel")},function()return b.powerSourceType or 1 end,function(o)b.powerSourceType=tonumber(o)==2 and 2 or 1 end)L("Power source","batterySource",true)L("Battery/Fuel percentage","field4Source")if(b.powerSourceType or 1)==2 then I(e("Fuel percentage"),{e("On"),e("Off")},function()return b.fuelShowPercent or 1 end,function(o)b.fuelShowPercent=tonumber(o)==2 and 2 or 1 end)N("fuel","Fuel",0,100)else t(e("Cells"),0,12,function()return b.cellCount or 0 end,function(o)b.cellCount=d(tonumber(o)or 0,0,12)b.detectedCells=nil end,0)I(e("Battery type"),h,function()return b.batteryType or 1 end,function(o)b.batteryType=d(math.floor(tonumber(o)or 1),1,#h)b.detectedCells=nil end)I(e("Battery style"),{e("Tower"),e("Dial")},function()return b.batteryStyle or 1 end,function(o)b.batteryStyle=tonumber(o)==2 and 2 or 1 end)N("batt","Battery/cell",2,4.35)N("field4","Battery/Fuel percentage",0,100)end;L("Current","currentSource")t(e("Current high"),0,10000,function()return b.currentHigh end,function(o)b.currentHigh=d(tonumber(o)or 0,0,10000)end,1)t(e("Current mid"),0,10000,function()return b.currentMid end,function(o)b.currentMid=d(tonumber(o)or 0,0,10000)end,1)form.addLine(e("Link"))L("Link quality","rssiSource")N("link","Link quality",0)form.addLine(e("Telemetry / Engine"))L("RPM","rpmSource")L("Telemetry 1","field1Source")N("field1","Telemetry 1",0)L("Telemetry 2","field2Source")N("field2","Telemetry 2",0)L("Telemetry 3","field3Source")N("field3","Telemetry 3",0)L("Telemetry 4","telemetry4Source")N("field4","Telemetry 4",0)form.addLine(e("In-flight screen"))I(e("In-flight screen"),{e("On"),e("Off")},function()return b.inFlightScreen or 1 end,function(o)b.inFlightScreen=tonumber(o)==2 and 2 or 1 end)L("In-flight stat 1","inFlight1Source")L("In-flight stat 2","inFlight2Source")L("In-flight stat 3","inFlight3Source")L("In-flight stat 4","inFlight4Source")form.addLine(e("Language"))I(e("Language"),i,function()return j(b.language)end,function(o)b.language=c.languageCodes[d(math.floor(tonumber(o)or 1),1,#c.languageCodes)]end)end;return{configure=a}
+local function configure(w, api)
+  local clamp = api.clamp
+  local T = function(key) return api.tr(w, key) end
+  local armChoices = {"Off", "SA", "SB", "SC", "SD", "SE", "SF", "SG", "SH"}
+  local batteryTypes = {"LiPo", "LiHV", "Li-ion", "LiFe", "NiCd"}
+  local languageNames = {
+    "English", "Deutsch", "Espanol", "Francais", "Italiano", "Polski",
+    "Portugues", "Zhongwen Jianti", "Zhongwen Fanti",
+  }
+
+  local function languageIndex(code)
+    for i = 1, #api.languageCodes do
+      if api.languageCodes[i] == code then return i end
+    end
+    return 1
+  end
+
+  local function changed(setter)
+    return function(value)
+      setter(value)
+      w.dirty, w.dirtyAt = true, os.clock()
+    end
+  end
+
+  local function armSwitchIndex()
+    local key = w.armSwitchKey
+    if not key and w.armSwitch then
+      if type(w.armSwitch.name) == "function" then
+        local ok, name = pcall(w.armSwitch.name, w.armSwitch)
+        if ok then key = name end
+      end
+      key = key or tostring(w.armSwitch)
+    end
+    key = key and (tostring(key):match("S[A-H]") or tostring(key):match("s[a-h]"))
+    key = key and key:upper() or ""
+    for i = 1, #armChoices do
+      if armChoices[i] == key then return i end
+    end
+    return 1
+  end
+
+  local function setArmSwitchIndex(value)
+    local key = armChoices[clamp(math.floor(tonumber(value) or 1), 1, #armChoices)]
+    if key == "Off" then
+      w.armSwitchKey, w.armSwitch = nil, nil
+    else
+      w.armSwitchKey, w.armSwitch = key, api.resolveSwitch(key)
+    end
+  end
+
+  local function addNumber(label, min, max, get, set, decimals)
+    if not form.addNumberField then return end
+    local places = decimals or 0
+    local factor = 10 ^ places
+    local fieldMin, fieldMax = min, max
+    local fieldGet, fieldSet = get, changed(set)
+    if places > 0 then
+      fieldMin, fieldMax = math.floor(min * factor + 0.5), math.floor(max * factor + 0.5)
+      fieldGet = function() return math.floor((tonumber(get()) or 0) * factor + 0.5) end
+      fieldSet = changed(function(value) set((tonumber(value) or 0) / factor) end)
+    end
+    local line = form.addLine(label)
+    local field = form.addNumberField(line, nil, fieldMin, fieldMax, fieldGet, fieldSet)
+    if field and type(field.decimals) == "function" then field:decimals(places) end
+  end
+
+  local function addChoice(label, choices, get, set)
+    local values = {}
+    for i = 1, #choices do values[i] = {choices[i], i} end
+    local setter = changed(set)
+    local line
+    if form.addChoiceField then
+      line = form.addLine(label)
+      if pcall(form.addChoiceField, line, nil, values, get, setter) then return end
+      if pcall(form.addChoiceField, line, nil, choices, get, setter) then return end
+      if pcall(form.addChoiceField, line, values, get, setter) then return end
+      if pcall(form.addChoiceField, line, choices, get, setter) then return end
+    end
+    if form.addSelectField then
+      if not line then line = form.addLine(label) end
+      if pcall(form.addSelectField, line, nil, values, get, setter) then return end
+      if pcall(form.addSelectField, line, nil, choices, get, setter) then return end
+      if pcall(form.addSelectField, line, values, get, setter) then return end
+      if pcall(form.addSelectField, line, choices, get, setter) then return end
+    end
+    addNumber(label, 1, #choices, get, set, 0)
+  end
+
+  local function addSource(label, key, resetCells)
+    local line = form.addLine(T(label))
+    if form.addSourceField then
+      form.addSourceField(line, nil, function() return w[key] end, changed(function(value)
+        w[key] = value
+        if resetCells then w.detectedCells = nil end
+      end))
+    end
+  end
+
+  local function addThreshold(prefix, label, decimals, maxValue)
+    local max = maxValue or 10000
+    local function field(suffix)
+      addNumber(T(label) .. " " .. T(suffix), 0, max,
+        function() return w[prefix .. suffix:sub(1, 1):upper() .. suffix:sub(2)] end,
+        function(value) w[prefix .. suffix:sub(1, 1):upper() .. suffix:sub(2)] = clamp(tonumber(value) or 0, 0, max) end,
+        decimals)
+    end
+    field("high")
+    field("mid")
+    if prefix == "batt" then field("low") end
+    if w[prefix .. "Mode"] ~= nil then
+      addChoice(T(label) .. " " .. T("scoring"), {T("High is good"), T("Low is good")},
+        function() return w[prefix .. "Mode"] end,
+        function(value) w[prefix .. "Mode"] = tonumber(value) == 2 and 2 or 1 end)
+    end
+  end
+
+  local line = form.addLine(T("Image"))
+  if form.addFileField then
+    form.addFileField(line, nil, "BITMAPS:/models", "image+ext",
+      function() return w.imageFile and w.imageFile:match("[^/]+$") or "" end,
+      changed(function(value)
+        w.imageFile = value and value ~= "" and ("BITMAPS:/models/" .. value) or nil
+        w.selectedBmp, w.selectedFile = nil, nil
+      end))
+  end
+
+  form.addLine(T("Display / Arm"))
+  addChoice(T("Theme"), {T("Dark"), T("Light")},
+    function() return w.themeMode or 1 end,
+    function(value) w.themeMode = tonumber(value) == 2 and 2 or 1 end)
+  addChoice(T("Arm switch"), armChoices, armSwitchIndex, setArmSwitchIndex)
+  addChoice(T("Arm switch direction"), {T("Normal"), T("Reversed")},
+    function() return w.armSwitchReverse or 1 end,
+    function(value) w.armSwitchReverse = tonumber(value) == 2 and 2 or 1 end)
+  addNumber(T("Arming delay"), 0, 60,
+    function() return w.armDelay or 5 end,
+    function(value) w.armDelay = clamp(tonumber(value) or 0, 0, 60) end, 0)
+  addNumber("Flights", 0, 9999,
+    function() return w.flightCount or 0 end,
+    function(value) w.flightCount = clamp(math.floor(tonumber(value) or 0), 0, 9999) end, 0)
+
+  form.addLine(T("Power / Battery / Fuel"))
+  addChoice(T("Power Source Type"), {T("Battery"), T("Fuel")},
+    function() return w.powerSourceType or 1 end,
+    function(value) w.powerSourceType = tonumber(value) == 2 and 2 or 1 end)
+  addSource("Power source", "batterySource", true)
+  addSource("Battery/Fuel percentage", "field4Source")
+  if (w.powerSourceType or 1) == 2 then
+    addChoice(T("Fuel percentage"), {T("On"), T("Off")},
+      function() return w.fuelShowPercent or 1 end,
+      function(value) w.fuelShowPercent = tonumber(value) == 2 and 2 or 1 end)
+    addThreshold("fuel", "Fuel", 0, 100)
+  else
+    addNumber(T("Cells"), 0, 12,
+      function() return w.cellCount or 0 end,
+      function(value) w.cellCount = clamp(tonumber(value) or 0, 0, 12); w.detectedCells = nil end, 0)
+    addChoice(T("Battery type"), batteryTypes,
+      function() return w.batteryType or 1 end,
+      function(value) w.batteryType = clamp(math.floor(tonumber(value) or 1), 1, #batteryTypes); w.detectedCells = nil end)
+    addChoice(T("Battery style"), {T("Tower"), T("Dial")},
+      function() return w.batteryStyle or 1 end,
+      function(value) w.batteryStyle = tonumber(value) == 2 and 2 or 1 end)
+    addThreshold("batt", "Battery/cell", 2, 4.35)
+    addThreshold("field4", "Battery/Fuel percentage", 0, 100)
+  end
+  addSource("Current", "currentSource")
+  addNumber(T("Current high"), 0, 10000,
+    function() return w.currentHigh end,
+    function(value) w.currentHigh = clamp(tonumber(value) or 0, 0, 10000) end, 1)
+  addNumber(T("Current mid"), 0, 10000,
+    function() return w.currentMid end,
+    function(value) w.currentMid = clamp(tonumber(value) or 0, 0, 10000) end, 1)
+
+  form.addLine(T("Link"))
+  addSource("Link quality", "rssiSource")
+  addThreshold("link", "Link quality", 0)
+
+  form.addLine(T("Telemetry / Engine"))
+  addSource("RPM", "rpmSource")
+  addSource("Telemetry 1", "field1Source")
+  addThreshold("field1", "Telemetry 1", 0)
+  addSource("Telemetry 2", "field2Source")
+  addThreshold("field2", "Telemetry 2", 0)
+  addSource("Telemetry 3", "field3Source")
+  addThreshold("field3", "Telemetry 3", 0)
+  addSource("Telemetry 4", "telemetry4Source")
+  addThreshold("field4", "Telemetry 4", 0)
+
+  form.addLine(T("In-flight screen"))
+  addChoice(T("In-flight screen"), {T("On"), T("Off")},
+    function() return w.inFlightScreen or 1 end,
+    function(value) w.inFlightScreen = tonumber(value) == 2 and 2 or 1 end)
+  addSource("In-flight stat 1", "inFlight1Source")
+  addSource("In-flight stat 2", "inFlight2Source")
+  addSource("In-flight stat 3", "inFlight3Source")
+  addSource("In-flight stat 4", "inFlight4Source")
+
+  form.addLine(T("Language"))
+  addChoice(T("Language"), languageNames,
+    function() return languageIndex(w.language) end,
+    function(value) w.language = api.languageCodes[clamp(math.floor(tonumber(value) or 1), 1, #api.languageCodes)] end)
+end
+
+return {configure = configure}

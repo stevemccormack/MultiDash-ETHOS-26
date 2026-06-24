@@ -42,7 +42,7 @@ system = {
   getSource = function(name) return source(name) end,
   getSwitch = function(name) return source(name) end,
 }
-model = {name = function() return "RC4/Test" end}
+model = {name = function() return "RC5/Test" end}
 form = {}
 
 local entry = assert(loadfile("main.lua"))()
@@ -59,7 +59,7 @@ original.battHigh = 4.35
 original.flightCount = 27
 original.language = "fr"
 assert(registered.write(original))
-assert(openedPath == "SCRIPTS:/MultiDash/models/RC4_Test.cfg")
+assert(openedPath == "SCRIPTS:/MultiDash/models/RC5_Test.cfg")
 assert(files[openedPath]:find("battery=RxBatt", 1, true))
 assert(files[openedPath]:find("current=ESC current", 1, true))
 assert(files[openedPath]:find("telemetry4=VFR", 1, true))
