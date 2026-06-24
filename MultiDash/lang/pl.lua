@@ -66,5 +66,6 @@ return {
   ["Current high"]="Wysoki próg prądu",
   ["Current mid"]="Średni próg prądu",
   ["Telemetry / Engine"]="Telemetria / Silnik",
+  ["Flights"]="Loty",
   ["Use Single Large Widget"]="Use Single Large Widget",
 }

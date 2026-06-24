@@ -66,5 +66,6 @@ return {
   ["Current high"]="Current high",
   ["Current mid"]="Current mid",
   ["Telemetry / Engine"]="Telemetry / Engine",
+  ["Flights"]="Flights",
   ["Use Single Large Widget"]="Use Single Large Widget",
 }

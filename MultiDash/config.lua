@@ -1,4 +1,5 @@
 local function configure(w, api)
+  if not form or type(form.addLine) ~= "function" then return end
   local clamp = api.clamp
   local T = function(key) return api.tr(w, key) end
   local armChoices = {"Off", "SA", "SB", "SC", "SD", "SE", "SF", "SG", "SH"}
@@ -60,8 +61,9 @@ local function configure(w, api)
       fieldSet = changed(function(value) set((tonumber(value) or 0) / factor) end)
     end
     local line = form.addLine(label)
-    local field = form.addNumberField(line, nil, fieldMin, fieldMax, fieldGet, fieldSet)
-    if field and type(field.decimals) == "function" then field:decimals(places) end
+    local ok, field = pcall(form.addNumberField, line, nil, fieldMin, fieldMax, fieldGet, fieldSet)
+    if not ok then ok, field = pcall(form.addNumberField, line, fieldMin, fieldMax, fieldGet, fieldSet) end
+    if ok and field and type(field.decimals) == "function" then pcall(field.decimals, field, places) end
   end
 
   local function addChoice(label, choices, get, set)
@@ -89,10 +91,13 @@ local function configure(w, api)
   local function addSource(label, key, resetCells)
     local line = form.addLine(T(label))
     if form.addSourceField then
-      form.addSourceField(line, nil, function() return w[key] end, changed(function(value)
+      local get = function() return w[key] end
+      local set = changed(function(value)
         w[key] = value
         if resetCells then w.detectedCells = nil end
-      end))
+      end)
+      if pcall(form.addSourceField, line, nil, get, set) then return end
+      pcall(form.addSourceField, line, get, set)
     end
   end
 
@@ -116,12 +121,14 @@ local function configure(w, api)
 
   local line = form.addLine(T("Image"))
   if form.addFileField then
-    form.addFileField(line, nil, "BITMAPS:/models", "image+ext",
-      function() return w.imageFile and w.imageFile:match("[^/]+$") or "" end,
-      changed(function(value)
-        w.imageFile = value and value ~= "" and ("BITMAPS:/models/" .. value) or nil
-        w.selectedBmp, w.selectedFile = nil, nil
-      end))
+    local get = function() return w.imageFile and w.imageFile:match("[^/]+$") or "" end
+    local set = changed(function(value)
+      w.imageFile = value and value ~= "" and ("BITMAPS:/models/" .. value) or nil
+      w.selectedBmp, w.selectedFile = nil, nil
+    end)
+    if not pcall(form.addFileField, line, nil, "BITMAPS:/models", "image+ext", get, set) then
+      pcall(form.addFileField, line, "BITMAPS:/models", "image+ext", get, set)
+    end
   end
 
   form.addLine(T("Display / Arm"))
@@ -135,7 +142,7 @@ local function configure(w, api)
   addNumber(T("Arming delay"), 0, 60,
     function() return w.armDelay or 5 end,
     function(value) w.armDelay = clamp(tonumber(value) or 0, 0, 60) end, 0)
-  addNumber("Flights", 0, 9999,
+  addNumber(T("Flights"), 0, 9999,
     function() return w.flightCount or 0 end,
     function(value) w.flightCount = clamp(math.floor(tonumber(value) or 0), 0, 9999) end, 0)
 

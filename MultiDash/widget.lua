@@ -3,9 +3,9 @@ local summaryModule
 local summaryApi
 local function T(widget, key) return i18n.text(widget, key) end
 local function getTextW(txt)
-    if lcd and lcd.getTextSize then
-        local w, h = lcd.getTextSize(txt or "")
-        return w or 0
+    if lcd and type(lcd.getTextSize) == "function" then
+        local ok, w = pcall(lcd.getTextSize, txt or "")
+        if ok then return w or 0 end
     end
     return 0
 end
@@ -32,17 +32,37 @@ local function windowSize(a, b, c, d)
         w, h = a, b
     end
     if (not w or not h) and lcd and type(lcd.getWindowSize) == "function" then
-        local ok, lw, lh = pcall(lcd.getWindowSize)
+        local ok, x, y, lw, lh = pcall(lcd.getWindowSize)
         if ok then
-            w, h = lw, lh
+            if type(lw) == "number" and type(lh) == "number" then
+                w, h = lw, lh
+            elseif type(x) == "table" then
+                w = x.w or x.width or x[3]
+                h = x.h or x.height or x[4]
+            else
+                w, h = x, y
+            end
         end
     end
     return tonumber(w) or 480, tonumber(h) or 320
 end
-local function isSingleLargeWidget(w, h)
-    if w < 700 or h < 260 then return false end
+local singleLargeSizes = {
+    ["784x294"] = true, ["784x316"] = true,
+    ["472x191"] = true, ["472x210"] = true,
+    ["630x236"] = true, ["630x258"] = true,
+}
+local fullScreenSizes = {
+    ["800x458"] = true, ["800x480"] = true,
+    ["480x301"] = true, ["480x320"] = true, ["480x272"] = true,
+    ["640x338"] = true, ["640x360"] = true,
+}
+local function isUsableWidgetSize(w, h)
+    local key = tostring(math.floor(w)) .. "x" .. tostring(math.floor(h))
+    if singleLargeSizes[key] then return true end
+    if fullScreenSizes[key] then return false end
+    if w < 460 or h < 185 then return false end
     local ratio = w / h
-    return ratio >= 1.95 and ratio <= 3.05
+    return ratio >= 1.95 and ratio <= 3.35
 end
 local function px(v, scale, lo, hi)
     local n = math.floor(v * scale + 0.5)
@@ -195,15 +215,17 @@ local function drawBitmapBox(x, y, w, h, bmp)
     end
     local bmpW, bmpH = w, h
     if type(bmp.width) == "function" then
-        bmpW = bmp:width() or w
+        local ok, value = pcall(bmp.width, bmp)
+        if ok and value then bmpW = value end
     end
     if type(bmp.height) == "function" then
-        bmpH = bmp:height() or h
+        local ok, value = pcall(bmp.height, bmp)
+        if ok and value then bmpH = value end
     end
     local bx = x + math.max(0, math.floor((w - bmpW) / 2))
     local by = y + math.max(0, math.floor((h - bmpH) / 2))
     if type(lcd.setClipping) == "function" then
-        lcd.setClipping(x, y, w, h)
+        pcall(lcd.setClipping, x, y, w, h)
     end
     if bitmapBasicSupported == true then
         lcd.drawBitmap(bx, by, bmp)
@@ -214,7 +236,7 @@ local function drawBitmapBox(x, y, w, h, bmp)
         bitmapBasicSupported = ok
     end
     if type(lcd.setClipping) == "function" then
-        lcd.setClipping()
+        pcall(lcd.setClipping)
     end
 end
 local annulusSupported = nil
@@ -275,7 +297,8 @@ local function getVal(src)
     local t = type(src)
     if t == "table" or t == "userdata" then
         if type(src.value) == "function" then
-            return src:value() or 0
+            local ok, value = pcall(src.value, src)
+            return ok and value or 0
         end
         if type(src.value) == "number" then
             return src.value
@@ -287,7 +310,8 @@ local function getVal(src)
         if ok then s = resolved end
     end
     if s and type(s.value) == "function" then
-        return s:value() or 0
+        local ok, value = pcall(s.value, s)
+        return ok and value or 0
     end
     return 0
 end
@@ -660,9 +684,10 @@ local function statStatus(w, key, st, c)
     if key == "rpm" then
         return c.neutral, "INFO"
     end
-    local mode = w[key .. "Mode"] or 1
+    local prefix = key == "telemetry4" and "field4" or key
+    local mode = w[prefix .. "Mode"] or 1
     local value = mode == 2 and st.max or st.min
-    local col, face = score(w, key, value, c)
+    local col, face = score(w, prefix, value, c)
     if face == ":)" then
         return col, "OK :)"
     end
@@ -858,6 +883,9 @@ local function updateStats(w)
     end
     if w.field3Source then
         pushStat(w, "field3", sourceName(w.field3Source, T(w, "Telemetry 3")), getVal(w.field3Source))
+    end
+    if w.telemetry4Source then
+        pushStat(w, "telemetry4", sourceName(w.telemetry4Source, T(w, "Telemetry 4")), getVal(w.telemetry4Source))
     end
     if percent ~= nil and (w.powerSourceType or 1) ~= 2 then
         pushStat(w, "field4", sourceName(w.field4Source, T(w, "Battery percentage")), percent)
@@ -1372,7 +1400,7 @@ local function paint(w, ...)
     local lineGap = px(31, scale, 16, 38)
     local imageX, imageY = margin, 0
     local c = theme(w)
-    if not isSingleLargeWidget(scrW, scrH) then
+    if not isUsableWidgetSize(scrW, scrH) then
         drawSizePrompt(w, c, scale, scrW, scrH)
         return
     end
@@ -1501,7 +1529,7 @@ local function paint(w, ...)
     local timerText = formatTime(w.flightTime or 0)
     local timerY = scrH - px(70, scale, 34, 84)
     setFontSize("small", scale)
-    local flightsText = "Flights: " .. tostring(math.floor(tonumber(w.flightCount) or 0))
+    local flightsText = T(w, "Flights") .. ": " .. tostring(math.floor(tonumber(w.flightCount) or 0))
     local flightsY = timerY - px(34, scale, 24, 40)
     local flightsBold = px(1, scale, 1, 2)
     lcd.color(c.secondary)
@@ -1607,7 +1635,7 @@ local function wakeup(w)
         updateFlight(w, now)
         w.nextRefresh = now + 0.1
         if lcd and type(lcd.invalidate) == "function" then
-            lcd.invalidate()
+            pcall(lcd.invalidate)
         end
     end
     if w.dirty and now - (w.dirtyAt or 0) > 0.5 then

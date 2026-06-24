@@ -66,5 +66,6 @@ return {
   ["Current high"]="电流高值",
   ["Current mid"]="电流中值",
   ["Telemetry / Engine"]="遥测 / 动力",
+  ["Flights"]="FEI XING",
   ["Use Single Large Widget"]="Use Single Large Widget",
 }

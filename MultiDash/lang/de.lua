@@ -66,5 +66,6 @@ return {
   ["Current high"]="Stromgrenze hoch",
   ["Current mid"]="Stromgrenze mittel",
   ["Telemetry / Engine"]="Telemetrie / Antrieb",
+  ["Flights"]="Fluege",
   ["Use Single Large Widget"]="Use Single Large Widget",
 }

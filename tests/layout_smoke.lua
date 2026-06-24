@@ -138,7 +138,7 @@ assert(dialVoltage and dialPercent, "dial voltage or percentage missing")
 assert(dialPercent.y >= dialVoltage.y + 25, "dial percentage was not shifted down")
 assert(math.abs(dialPercent.x - dialVoltage.x) < 40, "dial percentage is not centered below voltage")
 
-for _, size in ipairs({{784, 316}, {800, 320}, {1280, 520}}) do
+for _, size in ipairs({{472, 191}, {472, 210}, {630, 236}, {630, 258}, {784, 294}, {784, 316}, {1000, 380}}) do
   screenW, screenH = size[1], size[2]
   for _, mode in ipairs({"flight", "tower", "dial"}) do
     draws = {}

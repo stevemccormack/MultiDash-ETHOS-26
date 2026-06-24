@@ -66,5 +66,6 @@ return {
   ["Current high"]="Corrente alta",
   ["Current mid"]="Corrente media",
   ["Telemetry / Engine"]="Telemetria / Motore",
+  ["Flights"]="Voli",
   ["Use Single Large Widget"]="Use Single Large Widget",
 }

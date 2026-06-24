@@ -10,7 +10,7 @@ local critical = {
 local english = assert(loadfile("lang/en.lua"))()
 local keyCount = 0
 for _ in pairs(english) do keyCount = keyCount + 1 end
-assert(keyCount == 68, "unexpected English key count")
+assert(keyCount == 69, "unexpected English key count")
 
 for _, code in ipairs(codes) do
   local labels = assert(loadfile("lang/" .. code .. ".lua"))()

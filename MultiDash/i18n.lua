@@ -4,6 +4,7 @@ local codes = {
 local defaultCode = "en"
 local currentCode
 local current
+local fallback
 
 local function valid(code)
   local legacyIndex = tonumber(code)
@@ -16,15 +17,19 @@ local function valid(code)
   return defaultCode
 end
 
+local function loadLabels(code)
+  local chunk = loadfile("lang/" .. code .. ".lua")
+  if chunk then
+    local ok, labels = pcall(chunk)
+    if ok and type(labels) == "table" then return labels end
+  end
+  return {}
+end
+
 local function load(code)
   code = valid(code)
   if currentCode == code and current then return current end
-  local chunk = loadfile("lang/" .. code .. ".lua")
-  local labels = {}
-  if chunk then
-    local ok, result = pcall(chunk)
-    if ok and type(result) == "table" then labels = result end
-  end
+  local labels = loadLabels(code)
   currentCode = code
   current = labels
   return labels
@@ -35,12 +40,9 @@ local function text(widget, key)
   local value = labels[key]
   if type(value) == "string" and value ~= "" then return value end
   if currentCode ~= "en" then
-    local chunk = loadfile("lang/en.lua")
-    if chunk then
-      local ok, fallback = pcall(chunk)
-      value = ok and type(fallback) == "table" and fallback[key]
-      if type(value) == "string" and value ~= "" then return value end
-    end
+    fallback = fallback or loadLabels("en")
+    value = fallback[key]
+    if type(value) == "string" and value ~= "" then return value end
   end
   return key
 end

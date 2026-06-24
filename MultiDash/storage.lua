@@ -28,7 +28,11 @@ local function clamp(v, lo, hi)
 end
 
 local function modelKey()
-  local name = model and type(model.name) == "function" and model.name() or "default"
+  local name = "default"
+  if model and type(model.name) == "function" then
+    local ok, value = pcall(model.name)
+    if ok and value then name = value end
+  end
   return (name or "default"):gsub("%W", "_")
 end
 

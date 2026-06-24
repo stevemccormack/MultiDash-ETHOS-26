@@ -29,7 +29,7 @@ local function draw(w, c, scale, scrW, scrH, api)
 
   api.roundPanel(margin, headerY, width, headerH, radius, header, grid)
   api.setFontSize("large", scale)
-  local title = "Flights: " .. tostring(math.floor(tonumber(w.flightCount) or 0))
+  local title = T("Flights") .. ": " .. tostring(math.floor(tonumber(w.flightCount) or 0))
   local titleY = headerY + px(7, scale, 3, 10)
   boldText(title, margin + pad, titleY, c.text)
   api.setFontSize("huge", scale)

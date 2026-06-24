@@ -41,7 +41,7 @@ local widget = {
 
 local function init()
   if system and type(system.registerWidget) == "function" then
-    system.registerWidget(widget)
+    pcall(system.registerWidget, widget)
   end
 end
 

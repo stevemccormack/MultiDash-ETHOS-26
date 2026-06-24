@@ -33,16 +33,32 @@ draws = {}
 registered.paint(widget, 0, 0, 320, 160)
 assert(draws[prompt], "x/y/w/h size did not show size prompt")
 
-for _, size in ipairs({{480, 272}, {800, 480}, {1280, 720}}) do
+for _, size in ipairs({{472, 191}, {472, 210}, {630, 236}, {630, 258}, {784, 294}, {784, 316}}) do
   draws = {}
   lcd.getWindowSize = function() return size[1], size[2] end
   registered.paint(widget)
-  assert(draws[prompt], "non single-large size did not show prompt")
+  assert(not draws[prompt], "single-large widget size was blocked")
+end
+
+for _, size in ipairs({{420, 220}, {700, 180}, {360, 260}, {480, 272}, {480, 320}, {640, 360}, {800, 480}}) do
+  draws = {}
+  lcd.getWindowSize = function() return size[1], size[2] end
+  registered.paint(widget)
+  assert(draws[prompt], "non-single-large widget did not show size prompt")
 end
 
 draws = {}
 lcd.getWindowSize = function() return 784, 316 end
 registered.paint(widget)
 assert(not draws[prompt], "single-large widget was blocked")
+
+draws = {}
+lcd.getWindowSize = function() return 0, 56, 472, 210 end
+registered.paint(widget)
+assert(not draws[prompt], "four-return ETHOS window geometry was misread")
+
+draws = {}
+registered.paint(widget, 0, 56, 472, 210)
+assert(not draws[prompt], "paint x/y/w/h geometry was misread")
 
 print("MultiDash widget size smoke test OK")
