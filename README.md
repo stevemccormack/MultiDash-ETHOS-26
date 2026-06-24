@@ -127,7 +127,7 @@ Model images are selected from `BITMAPS:/models`. Per-model settings are saved u
 
 ## Languages
 
-English, German, Spanish, French, Italian, Polish, Portuguese, Chinese Simplified, and Chinese Traditional.
+English, German, Spanish, French, Italian, Polish, Portuguese, Chinese Simplified, and Chinese Traditional. Selectable from the bottom of the widget.
 
 ## Notes / Disclaimer
 
