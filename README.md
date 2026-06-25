@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/MultiDash/MultiDash.png" alt="MultiDash logo" width="280">
 </p>
 
-MultiDash is a configurable telemetry dashboard for FrSky ETHOS 1.6 and higher. It started as a UMX dashboard, but its telemetry fields can be used with TW, ACCESS, ACCST, DSM, and other setups as long as ETHOS can see the sensor.
+MultiDash is a configurable telemetry dashboard for FrSky's ETHOS 26. It started as a UMX dashboard, but its telemetry fields can be used with TW, ACCESS, ACCST, DSM, and other setups as long as ETHOS can see the sensor.
 
 This release includes pre-flight, in-flight, and flight-summary screens with automatic timing and persistent flight counts.
 
