@@ -1091,10 +1091,10 @@ local function statKeyForSource(w, src)
     end
     return nil
 end
-local function drawFuelGauge(w, c, scale, mainLeft, mainW, topY, bottomY, fuelValue, sizeScale, centerX, centerY)
+local function drawFuelGauge(w, c, scale, mainLeft, mainW, topY, bottomY, fuelValue, sizeScale, centerX, centerY, batteryGauge, packVoltage, voltageColor, splitFooter)
     local pct = clamp(tonumber(fuelValue) or 0, 0, 100)
     local cx = centerX or (mainLeft + math.floor(mainW / 2))
-    local showPercent = (w.fuelShowPercent or 1) ~= 2
+    local showPercent = batteryGauge or (w.fuelShowPercent or 1) ~= 2
     local percentReserve = showPercent and px(36, scale, 22, 44) or px(8, scale, 4, 12)
     local dialBottom = math.max(topY + 1, bottomY - percentReserve)
     local areaH = math.max(1, dialBottom - topY)
@@ -1103,19 +1103,32 @@ local function drawFuelGauge(w, c, scale, mainLeft, mainW, topY, bottomY, fuelVa
     if r < px(38, scale, 24, 50) then
         setFontSize("large", scale)
         lcd.color(c.text)
+        local footerY = topY + math.floor(areaH / 2)
         local fallback = showPercent and (tostring(math.floor(pct + 0.5)) .. "%") or "FUEL"
-        lcd.drawText(mainLeft + math.floor((mainW - (getTextW(fallback) or 0)) / 2), topY + math.floor(areaH / 2), fallback)
+        if splitFooter and packVoltage then
+            local voltageText = string.format("%.2fV", packVoltage)
+            lcd.color(voltageColor or c.text)
+            lcd.drawText(mainLeft, footerY, voltageText)
+            lcd.drawText(mainLeft + mainW - (getTextW(fallback) or 0), footerY, fallback)
+        else
+            lcd.drawText(mainLeft + math.floor((mainW - (getTextW(fallback) or 0)) / 2), footerY, fallback)
+            if batteryGauge and packVoltage then
+                local voltageText = string.format("%.2fV", packVoltage)
+                lcd.color(voltageColor or c.text)
+                lcd.drawText(mainLeft + math.floor((mainW - (getTextW(voltageText) or 0)) / 2), footerY + px(42, scale, 28, 50), voltageText)
+            end
+        end
         return false
     end
     local cutDepth = math.floor(r * 0.3)
     cy = math.min(cy, dialBottom - cutDepth)
     local cutY = cy + cutDepth
     local face = lcd.RGB(0, 0, 0)
-    local rim = lcd.RGB(205, 210, 210)
+    local rim = lcd.RGB(235, 240, 240)
     local red = lcd.RGB(255, 35, 25)
     local gaugeText = lcd.RGB(255, 255, 255)
-    local fuelHigh = w.fuelHigh or 40
-    local fuelMid = w.fuelMid or 20
+    local fuelHigh = batteryGauge and (w.field4High or 80) or (w.fuelHigh or 40)
+    local fuelMid = batteryGauge and (w.field4Mid or 30) or (w.fuelMid or 20)
     if fuelHigh < fuelMid then
         fuelHigh, fuelMid = fuelMid, fuelHigh
     end
@@ -1128,15 +1141,17 @@ local function drawFuelGauge(w, c, scale, mainLeft, mainW, topY, bottomY, fuelVa
             lcd.drawFilledRectangle(cx - half, cy + y, half * 2 + 1, 6)
         end
     end
+    local rimWeight = px(3, scale, 2, 4)
+    local innerRim = r - px(6, scale, 3, 9)
     lcd.color(rim)
     if lcd.drawCircle then
-        lcd.drawCircle(cx, cy, r)
-        lcd.drawCircle(cx, cy, r - 1)
-        lcd.drawCircle(cx, cy, r - px(4, scale, 2, 8))
-        lcd.drawCircle(cx, cy, r - px(4, scale, 2, 8) - 1)
+        for o = 0, rimWeight - 1 do
+            lcd.drawCircle(cx, cy, r - o)
+            lcd.drawCircle(cx, cy, innerRim - o)
+        end
     else
-        lcd.drawLine(cx - r, cy, cx, cy - r)
-        lcd.drawLine(cx, cy - r, cx + r, cy)
+        drawHeavyLine(cx - r, cy, cx, cy - r, rimWeight)
+        drawHeavyLine(cx, cy - r, cx + r, cy, rimWeight)
     end
     for i = 0, 8 do
         local deg = 180 + i * 22.5
@@ -1145,17 +1160,18 @@ local function drawFuelGauge(w, c, scale, mainLeft, mainW, topY, bottomY, fuelVa
         local x2, y2 = polarPoint(cx, cy, deg, r - px(major and 34 or 24, scale, 14, 40))
         local tickPct = i * 12.5
         lcd.color(tickPct < fuelMid and c.bad or (tickPct < fuelHigh and c.warn or c.good))
-        drawHeavyLine(x1, y1, x2, y2, major and 2 or 1)
+        drawHeavyLine(x1, y1, x2, y2, major and px(3, scale, 2, 4) or px(2, scale, 1, 3))
     end
     setFontSize("small", scale)
     lcd.color(gaugeText)
-    local labelWeight = px(2, scale, 1, 2)
-    local lx, ly = polarPoint(cx, cy, 180, r - px(28, scale, 16, 38))
-    drawHeavyText(lx - math.floor((getTextW("E") or 0) / 2), ly - px(10, scale, 6, 14), "E", labelWeight)
-    lx, ly = polarPoint(cx, cy, 270, r - px(42, scale, 24, 54))
-    drawHeavyText(lx - math.floor((getTextW("1/2") or 0) / 2), ly - px(10, scale, 6, 14), "1/2", labelWeight)
-    lx, ly = polarPoint(cx, cy, 360, r - px(28, scale, 16, 38))
-    drawHeavyText(lx - math.floor((getTextW("F") or 0) / 2), ly - px(10, scale, 6, 14), "F", labelWeight)
+    local labelWeight = px(3, scale, 2, 3)
+    local labelY = px(11, scale, 7, 15)
+    local lx, ly = polarPoint(cx, cy, 180, r - px(46, scale, 28, 60))
+    drawHeavyText(lx - math.floor((getTextW("E") or 0) / 2), ly - labelY, "E", labelWeight)
+    lx, ly = polarPoint(cx, cy, 270, r - px(62, scale, 36, 74))
+    drawHeavyText(lx - math.floor((getTextW("1/2") or 0) / 2), ly - labelY, "1/2", labelWeight)
+    lx, ly = polarPoint(cx, cy, 360, r - px(46, scale, 28, 60))
+    drawHeavyText(lx - math.floor((getTextW("F") or 0) / 2), ly - labelY, "F", labelWeight)
     local needleDeg = 180 + pct * 1.8
     local nx, ny = polarPoint(cx, cy, needleDeg, math.floor(r * 0.78))
     lcd.color(red)
@@ -1172,12 +1188,32 @@ local function drawFuelGauge(w, c, scale, mainLeft, mainW, topY, bottomY, fuelVa
     lcd.color(rim)
     lcd.drawLine(cx - r + px(10, scale, 5, 16), cutY, cx + r - px(10, scale, 5, 16), cutY)
     if showPercent then
-        local percentText = T(w, "Dash Fuel"):upper() .. " " .. tostring(math.floor(pct + 0.5)) .. "%"
+        local percentText = splitFooter and (tostring(math.floor(pct + 0.5)) .. "%")
+            or (T(w, batteryGauge and "Batt" or "Dash Fuel"):upper() .. " " .. tostring(math.floor(pct + 0.5)) .. "%")
         setFontSize("large", scale)
         local percentColor = pct < fuelMid and c.bad or (pct < fuelHigh and c.warn or c.good)
         lcd.color(percentColor)
         local percentY = cutY + px(5, scale, 3, 8)
-        drawHeavyText(cx - math.floor((getTextW(percentText) or 0) / 2), percentY, percentText, labelWeight)
+        if splitFooter and packVoltage then
+            local voltageText = string.format("%.2fV", packVoltage)
+            setFontSize("huge", scale)
+            local inset = px(12, scale, 6, 18)
+            local voltageX = math.max(mainLeft, cx - r + inset)
+            local percentX = math.min(mainLeft + mainW - (getTextW(percentText) or 0), cx + r - inset - (getTextW(percentText) or 0))
+            lcd.color(voltageColor or percentColor)
+            drawHeavyText(voltageX, percentY, voltageText, labelWeight)
+            lcd.color(percentColor)
+            drawHeavyText(percentX, percentY, percentText, labelWeight)
+        else
+            drawHeavyText(cx - math.floor((getTextW(percentText) or 0) / 2), percentY, percentText, labelWeight)
+            if batteryGauge and packVoltage then
+                local voltageText = string.format("%.2fV", packVoltage)
+                setFontSize("huge", scale)
+                lcd.color(voltageColor or percentColor)
+                local voltageY = percentY + px(42, scale, 28, 50)
+                drawHeavyText(cx - math.floor((getTextW(voltageText) or 0) / 2), voltageY, voltageText, labelWeight)
+            end
+        end
     end
     return true
 end
@@ -1213,6 +1249,8 @@ end
 local function drawInFlight(w, c, scale, scrW, scrH)
     local batt = getVal(w.batterySource)
     local fuelMode = (w.powerSourceType or 1) == 2
+    local batteryGauge = not fuelMode and tonumber(w.batteryStyle) == 2
+    local gaugeMode = fuelMode or batteryGauge
     if fuelMode then
         batt = batteryFuelPercent(w, batt) or batt
     end
@@ -1259,14 +1297,21 @@ local function drawInFlight(w, c, scale, scrW, scrH)
     if fillW > 0 then
         lcd.drawFilledRectangle(linkX + 2, linkY + 2, fillW, linkBarH - 4)
     end
-    if fuelMode then
+    if gaugeMode then
         local fuelLeft = margin
         local fuelRight = rightX - px(8, scale, 4, 14)
         local fuelW = math.max(1, fuelRight - fuelLeft)
         local fuelTop = linkY + linkBarH + px(92, scale, 54, 118) + 4
         local fuelBottom = scrH - px(82, scale, 44, 94) + px(62, scale, 36, 80) + 4
-        local fuelCx = fuelLeft + math.floor(fuelW * 0.38)
-        drawFuelGauge(w, c, scale, fuelLeft, fuelW, fuelTop, fuelBottom, batt, 1.42, fuelCx, fuelBottom)
+        local fuelCx = fuelLeft + math.floor(fuelW * 0.38) + px(14, scale, 8, 20)
+        if batteryGauge then
+            local percent = batteryFuelPercent(w, batt) or 0
+            local drop = px(6, scale, 4, 10) - 5
+            drawFuelGauge(w, c, scale, fuelLeft, fuelW, fuelTop + drop, fuelBottom + drop,
+                percent, 1.42, fuelCx, fuelBottom + drop, true, batt, battCol, true)
+        else
+            drawFuelGauge(w, c, scale, fuelLeft, fuelW, fuelTop, fuelBottom, batt, 1.42, fuelCx, fuelBottom)
+        end
         if w.currentSource then
             setFontSize("small", scale)
             lcd.color(c.secondary)
@@ -1374,7 +1419,7 @@ local function drawInFlight(w, c, scale, scrW, scrH)
     lcd.color(c.text)
     local timeText = formatTime(w.flightTime or 0)
     local tx
-    if fuelMode then
+    if gaugeMode then
         tx = math.max(margin, rightX - px(10, scale, 5, 16) - (getTextW(timeText) or 0))
     else
         tx = math.floor((scrW - (getTextW(timeText) or 0)) / 2)
@@ -1479,6 +1524,14 @@ local function paint(w, ...)
         local gaugeTop = imageY + imageH + px(6, scale, 3, 10)
         local gaugeBottom = scrH - px(70, scale, 34, 84) - px(4, scale, 2, 8)
         drawFuelGauge(w, c, scale, gaugeLeft, gaugeW, gaugeTop, gaugeBottom, batt, 2.1, math.floor(scrW / 2), gaugeBottom)
+    elseif tonumber(w.batteryStyle) == 2 then
+        local gaugeW = math.floor(scrW * 0.72)
+        local gaugeLeft = math.floor((scrW - gaugeW) / 2)
+        local gaugeTop = imageY + imageH + px(6, scale, 3, 10)
+        local gaugeBottom = scrH - px(70, scale, 34, 84) - px(4, scale, 2, 8)
+        local percent = batteryFuelPercent(w, batt) or 0
+        drawFuelGauge(w, c, scale, gaugeLeft, gaugeW, gaugeTop, gaugeBottom,
+            percent, 2.1, math.floor(scrW / 2), gaugeBottom, true, batt, battCol)
     else
         local leftSafe = imageX + imageW + gap
         local rightSafe = scrW - rightPad - lqBarW - gap
@@ -1487,41 +1540,38 @@ local function paint(w, ...)
         if centerAreaW > 0 then
             maxBattW = math.min(maxBattW, math.floor(centerAreaW * 0.98))
         end
-        local drewDial = tonumber(w.batteryStyle) == 2 and drawBatteryDial(w, c, scale, scrW, scrH, batt, ratio, battCol)
-        if not drewDial then
-            local bottomReserve = px(92, scale, 48, 130)
-            local by = px(34, scale, 8, 42)
-            local maxBattH = scrH - by - bottomReserve
-            local battH = math.min(math.floor(scrH * 0.71), maxBattH, math.floor(maxBattW / 0.6))
-            battH = clamp(battH, px(120, visualScale, 78, math.floor(scrH * 0.55)), math.floor(scrH * 0.78))
-            local battW = math.floor(battH * 0.6)
-            local centerX = math.floor((scrW - battW) / 2)
-            local maxX = scrW - rightPad - lqBarW - gap - battW
-            local bx = maxX >= leftSafe and clamp(centerX, leftSafe, maxX) or clamp(centerX, margin, scrW - margin - battW)
-            local space = 2
-            local interiorH = battH - 4
-            local segH = math.floor((interiorH - (5 - 1) * space) / 5)
-            local segW = battW - 4
-            roundPanel(bx, by, battW, battH, px(6, scale, 3, 8), c.bg, c.outline)
-            for i = 1, 5 do
-                local yOff = by + 2 + (i - 1) * (segH + space)
-                if i > (5 - slices) then
-                    lcd.color(battCol)
-                else
-                    lcd.color(c.batteryEmpty)
-                end
-                lcd.drawFilledRectangle(bx + 2, yOff, segW, segH)
+        local bottomReserve = px(92, scale, 48, 130)
+        local by = px(34, scale, 8, 42)
+        local maxBattH = scrH - by - bottomReserve
+        local battH = math.min(math.floor(scrH * 0.71), maxBattH, math.floor(maxBattW / 0.6))
+        battH = clamp(battH, px(120, visualScale, 78, math.floor(scrH * 0.55)), math.floor(scrH * 0.78))
+        local battW = math.floor(battH * 0.6)
+        local centerX = math.floor((scrW - battW) / 2)
+        local maxX = scrW - rightPad - lqBarW - gap - battW
+        local bx = maxX >= leftSafe and clamp(centerX, leftSafe, maxX) or clamp(centerX, margin, scrW - margin - battW)
+        local space = 2
+        local interiorH = battH - 4
+        local segH = math.floor((interiorH - (5 - 1) * space) / 5)
+        local segW = battW - 4
+        roundPanel(bx, by, battW, battH, px(6, scale, 3, 8), c.bg, c.outline)
+        for i = 1, 5 do
+            local yOff = by + 2 + (i - 1) * (segH + space)
+            if i > (5 - slices) then
+                lcd.color(battCol)
+            else
+                lcd.color(c.batteryEmpty)
             end
-            lcd.color(c.outline)
-            local headW = math.floor(battW * 0.4)
-            local headX = bx + math.floor((battW - headW) / 2)
-            local headH = math.max(2, math.floor(battH * 0.05))
-            lcd.drawFilledRectangle(headX, by - headH - 2, headW, headH)
-            local battCenter = bx + math.floor(battW / 2)
-            local voltageY = by + battH + px(10, scale, 4, 14)
-            local percent = batteryFuelPercent(w, batt)
-            drawVoltagePercentStack(battCenter, voltageY, batt, percent, battCol, scale)
+            lcd.drawFilledRectangle(bx + 2, yOff, segW, segH)
         end
+        lcd.color(c.outline)
+        local headW = math.floor(battW * 0.4)
+        local headX = bx + math.floor((battW - headW) / 2)
+        local headH = math.max(2, math.floor(battH * 0.05))
+        lcd.drawFilledRectangle(headX, by - headH - 2, headW, headH)
+        local battCenter = bx + math.floor(battW / 2)
+        local voltageY = by + battH + px(10, scale, 4, 14)
+        local percent = batteryFuelPercent(w, batt)
+        drawVoltagePercentStack(battCenter, voltageY, batt, percent, battCol, scale)
     end
     lcd.color(c.text)
     local timerScale = scale * 1.5

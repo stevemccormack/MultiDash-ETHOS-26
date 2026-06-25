@@ -164,7 +164,7 @@ local function configure(w, api)
     addChoice(T("Battery type"), batteryTypes,
       function() return w.batteryType or 1 end,
       function(value) w.batteryType = clamp(math.floor(tonumber(value) or 1), 1, #batteryTypes); w.detectedCells = nil end)
-    addChoice(T("Battery style"), {T("Tower"), T("Dial")},
+    addChoice(T("Battery style"), {T("Tower"), T("Gauge")},
       function() return w.batteryStyle or 1 end,
       function(value) w.batteryStyle = tonumber(value) == 2 and 2 or 1 end)
     addThreshold("batt", "Battery/cell", 2, 4.35)

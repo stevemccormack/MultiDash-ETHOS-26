@@ -3,7 +3,7 @@ return {
   ["Cells"]="Cells",
   ["Battery style"]="Battery style",
   ["Tower"]="Tower",
-  ["Dial"]="Dial",
+  ["Dial"]="Dial",["Gauge"]="Gauge",
   ["Theme"]="Theme",
   ["Dark"]="Dark",
   ["Light"]="Light",
