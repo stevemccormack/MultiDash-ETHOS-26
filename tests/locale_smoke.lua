@@ -40,7 +40,6 @@ lcd = setmetatable({
   drawText = function(_, _, text) draws[tostring(text)] = true end,
   drawFilledCircle = noop,
   drawCircle = noop,
-  drawAnnulusSector = noop,
   invalidate = noop,
 }, {__index = function() return noop end})
 

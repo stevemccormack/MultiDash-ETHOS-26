@@ -239,40 +239,6 @@ local function drawBitmapBox(x, y, w, h, bmp)
         pcall(lcd.setClipping)
     end
 end
-local annulusSupported = nil
-local function drawAnnulusSweep(cx, cy, inner, outer, startAngle, endAngle, color)
-    lcd.color(color)
-    local sweep = endAngle - startAngle
-    if sweep <= 180 then
-        lcd.drawAnnulusSector(cx, cy, inner, outer, startAngle, endAngle)
-        return 
-    end
-    local mid = startAngle + sweep / 2
-    lcd.drawAnnulusSector(cx, cy, inner, outer, startAngle, mid)
-    lcd.drawAnnulusSector(cx, cy, inner, outer, mid, endAngle)
-end
-local function drawArc(cx, cy, radius, thickness, startAngle, endAngle, color)
-    if not lcd.drawAnnulusSector or annulusSupported == false then
-        return false
-    end
-    if math.abs(startAngle - endAngle) < 1 then
-        return true
-    end
-    local outer = radius
-    local inner = math.max(1, radius - thickness)
-    startAngle = startAngle % 360
-    endAngle = endAngle % 360
-    if endAngle <= startAngle then
-        endAngle = endAngle + 360
-    end
-    if annulusSupported == nil then
-        local ok = pcall(drawAnnulusSweep, cx, cy, inner, outer, startAngle, endAngle, color)
-        annulusSupported = ok
-        return ok
-    end
-    drawAnnulusSweep(cx, cy, inner, outer, startAngle, endAngle, color)
-    return true
-end
 local function polarPoint(cx, cy, deg, radius)
     local angle = math.rad(deg)
     return cx + math.floor(math.cos(angle) * radius), cy + math.floor(math.sin(angle) * radius)
@@ -614,6 +580,9 @@ local function create()
         field3Mode = 2,
         field4High = 80,
         field4Mid = 30,
+        telemetry4High = 80,
+        telemetry4Mid = 30,
+        telemetry4Mode = 1,
         flightActive = false,
         postFlight = false,
         flightStart = 0,
@@ -684,10 +653,9 @@ local function statStatus(w, key, st, c)
     if key == "rpm" then
         return c.neutral, "INFO"
     end
-    local prefix = key == "telemetry4" and "field4" or key
-    local mode = w[prefix .. "Mode"] or 1
+    local mode = w[key .. "Mode"] or 1
     local value = mode == 2 and st.max or st.min
-    local col, face = score(w, prefix, value, c)
+    local col, face = score(w, key, value, c)
     if face == ":)" then
         return col, "OK :)"
     end
@@ -927,33 +895,6 @@ local function updateFlight(w, now)
         end
     end
 end
-local function drawBatteryDial(w, c, scale, scrW, scrH, batt, ratio, battCol)
-    if not lcd.drawAnnulusSector then
-        return false
-    end
-    local radius = math.floor(math.min(scrH * 0.47, scrW * 0.34))
-    local minRadius = px(96, scale, 68, 126)
-    if radius < minRadius then
-        radius = minRadius
-    end
-    radius = math.min(radius, math.floor(scrH * 0.49), math.floor(scrW * 0.45))
-    local cx = math.floor(scrW / 2)
-    local cy = math.floor(scrH / 2)
-    local thickness = clamp(math.floor(radius * 0.21), px(20, scale, 14, 34), math.floor(radius * 0.3))
-    if not drawArc(cx, cy, radius, thickness, 225, 135, c.barFrame) then
-        return false
-    end
-    if ratio > 0.01 then
-        drawArc(cx, cy, radius, thickness, 225, 225 + ratio * 270, battCol)
-    end
-    local percent = batteryFuelPercent(w, batt)
-    drawVoltagePercentStack(cx, cy - px(28, scale, 12, 34), batt, percent, battCol, scale)
-    setFontSize("small", scale)
-    lcd.color(c.secondary)
-    local battLabel = T(w, "Batt")
-    lcd.drawText(cx - math.floor((getTextW(battLabel) or 0) / 2), cy + px(58, scale, 32, 68), battLabel)
-    return true
-end
 local sourceValidityMethods = {
     "isValid",
     "valid",
@@ -1084,7 +1025,7 @@ local function statKeyForSource(w, src)
         return "field3"
     end
     if src == w.telemetry4Source then
-        return "field4"
+        return "telemetry4"
     end
     if src == w.field4Source then
         return "field4"
@@ -1096,8 +1037,8 @@ local function drawFuelGauge(w, c, scale, mainLeft, mainW, topY, bottomY, fuelVa
     local cx = centerX or (mainLeft + math.floor(mainW / 2))
     local showPercent = batteryGauge or (w.fuelShowPercent or 1) ~= 2
     local percentReserve = showPercent and px(36, scale, 22, 44) or px(8, scale, 4, 12)
-    local dialBottom = math.max(topY + 1, bottomY - percentReserve)
-    local areaH = math.max(1, dialBottom - topY)
+    local gaugeBottom = math.max(topY + 1, bottomY - percentReserve)
+    local areaH = math.max(1, gaugeBottom - topY)
     local cy = centerY or (topY + math.floor(areaH * 0.74))
     local r = math.floor(math.min(mainW * 0.49, areaH * 0.74, px(215, scale, 132, 245)) * (sizeScale or 1))
     if r < px(38, scale, 24, 50) then
@@ -1121,7 +1062,7 @@ local function drawFuelGauge(w, c, scale, mainLeft, mainW, topY, bottomY, fuelVa
         return false
     end
     local cutDepth = math.floor(r * 0.3)
-    cy = math.min(cy, dialBottom - cutDepth)
+    cy = math.min(cy, gaugeBottom - cutDepth)
     local cutY = cy + cutDepth
     local face = lcd.RGB(0, 0, 0)
     local rim = lcd.RGB(235, 240, 240)
@@ -1175,7 +1116,7 @@ local function drawFuelGauge(w, c, scale, mainLeft, mainW, topY, bottomY, fuelVa
     local needleDeg = 180 + pct * 1.8
     local nx, ny = polarPoint(cx, cy, needleDeg, math.floor(r * 0.78))
     lcd.color(red)
-    drawHeavyLine(cx, cy, nx, ny, px(3, scale, 2, 4))
+    drawHeavyLine(cx, cy, nx, ny, px(4, scale, 3, 5))
     if lcd.drawFilledCircle then
         lcd.drawFilledCircle(cx, cy, px(11, scale, 7, 15))
         lcd.color(face)
@@ -1315,7 +1256,7 @@ local function drawInFlight(w, c, scale, scrW, scrH)
         if w.currentSource then
             setFontSize("small", scale)
             lcd.color(c.secondary)
-        local currentText = T(w, "Curr") .. " " .. formatValue(getVal(w.currentSource)) .. "A"
+            local currentText = T(w, "Curr") .. " " .. formatValue(getVal(w.currentSource)) .. "A"
             lcd.drawText(fuelRight - (getTextW(currentText) or 0), fuelTop + px(2, scale, 1, 4), currentText)
         end
     else
@@ -1348,7 +1289,6 @@ local function drawInFlight(w, c, scale, scrW, scrH)
         local headW = math.max(3, math.floor(battW * 0.035))
         local headH = math.floor(battH * 0.48)
         lcd.drawFilledRectangle(bx + battW + px(2, scale, 1, 4), by + math.floor((battH - headH) / 2), headW, headH)
-        local battCenter = bx + math.floor(battW / 2)
         local textY = by + battH + px(6, scale, 3, 10)
         local voltageScale = scale * 1.5
         setFontSize("huge", voltageScale)

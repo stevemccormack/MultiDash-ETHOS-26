@@ -13,7 +13,6 @@ lcd = setmetatable({
   end,
   drawFilledCircle = noop,
   drawCircle = noop,
-  drawAnnulusSector = noop,
   invalidate = noop,
 }, {__index = function() return noop end})
 
@@ -127,30 +126,29 @@ draws = {}
 widget.batteryStyle = 2
 registered.paint(widget)
 
-local dialVoltage, dialPercent
+local gaugeVoltage, gaugePercent
 for i = 1, #draws do
   local item = draws[i]
-  if item.text == "52.20V" then dialVoltage = item end
-  if item.text == "88%" then dialPercent = item end
+  if item.text == "52.20V" then gaugeVoltage = item end
+  if item.text == "88%" or item.text:find("88%%") then gaugePercent = item end
 end
 
-assert(dialVoltage and dialPercent, "dial voltage or percentage missing")
-assert(dialPercent.y >= dialVoltage.y + 25, "dial percentage was not shifted down")
-assert(math.abs(dialPercent.x - dialVoltage.x) < 40, "dial percentage is not centered below voltage")
+assert(gaugeVoltage and gaugePercent, "gauge voltage or percentage missing")
+assert(gaugeVoltage.y >= gaugePercent.y + 25, "gauge voltage was not shifted below percentage")
 
 for _, size in ipairs({{472, 191}, {472, 210}, {630, 236}, {630, 258}, {784, 294}, {784, 316}, {1000, 380}}) do
   screenW, screenH = size[1], size[2]
-  for _, mode in ipairs({"flight", "tower", "dial"}) do
+  for _, mode in ipairs({"flight", "tower", "gauge"}) do
     draws = {}
     widget.flightActive = mode == "flight"
     widget.postFlight = false
-    widget.batteryStyle = mode == "dial" and 2 or 1
+    widget.batteryStyle = mode == "gauge" and 2 or 1
     registered.paint(widget)
     local foundVoltage, foundPercent, foundCurrent, foundField1, foundField4
     for i = 1, #draws do
       local item = draws[i]
       if item.text == "52.20V" then foundVoltage = item end
-      if item.text == "88%" then foundPercent = item end
+      if item.text == "88%" or item.text:find("88%%") then foundPercent = item end
       if item.text:find("123.4A", 1, true) then foundCurrent = item end
       if item.text:find("Frame losses", 1, true) then foundField1 = item end
       if item.text:find("Telemetry four", 1, true) then foundField4 = item end
@@ -163,6 +161,9 @@ for _, size in ipairs({{472, 191}, {472, 210}, {630, 236}, {630, 258}, {784, 294
         "flight percentage was not shifted right")
       assert(math.abs(foundPercent.y - foundVoltage.y) <= 5,
         "flight percentage is not aligned with voltage")
+    elseif mode == "gauge" then
+      assert(foundVoltage.y >= foundPercent.y + 25,
+        "gauge voltage was not shifted below percentage")
     else
       assert(foundPercent.y >= foundVoltage.y + 25, mode .. " percentage was not shifted down")
       assert(math.abs(foundPercent.x - foundVoltage.x) < 40,

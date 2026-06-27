@@ -104,9 +104,10 @@ local function configure(w, api)
   local function addThreshold(prefix, label, decimals, maxValue)
     local max = maxValue or 10000
     local function field(suffix)
+      local key = prefix .. suffix:sub(1, 1):upper() .. suffix:sub(2)
       addNumber(T(label) .. " " .. T(suffix), 0, max,
-        function() return w[prefix .. suffix:sub(1, 1):upper() .. suffix:sub(2)] end,
-        function(value) w[prefix .. suffix:sub(1, 1):upper() .. suffix:sub(2)] = clamp(tonumber(value) or 0, 0, max) end,
+        function() return w[key] end,
+        function(value) w[key] = clamp(tonumber(value) or 0, 0, max) end,
         decimals)
     end
     field("high")
@@ -191,7 +192,7 @@ local function configure(w, api)
   addSource("Telemetry 3", "field3Source")
   addThreshold("field3", "Telemetry 3", 0)
   addSource("Telemetry 4", "telemetry4Source")
-  addThreshold("field4", "Telemetry 4", 0)
+  addThreshold("telemetry4", "Telemetry 4", 0)
 
   form.addLine(T("In-flight screen"))
   addChoice(T("In-flight screen"), {T("On"), T("Off")},

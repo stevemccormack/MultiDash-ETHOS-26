@@ -17,7 +17,7 @@ local sourceOrder = {
   "battery", "link", "field1", "field2", "field3", "field4", "telemetry4",
   "inFlight1", "inFlight2", "inFlight3", "inFlight4", "current", "rpm",
 }
-local thresholdKeys = {"batt", "fuel", "link", "current", "field1", "field2", "field3", "field4"}
+local thresholdKeys = {"batt", "fuel", "link", "current", "field1", "field2", "field3", "field4", "telemetry4"}
 local thresholdSuffixes = {"High", "Mid", "Low", "Mode"}
 local objectProps = {"name", "id", "label", "toString", "stringValue"}
 
@@ -117,6 +117,9 @@ local function normalize(w)
   if (w.field4High or 0) == 0 and (w.field4Mid or 0) == 0 then
     w.field4High, w.field4Mid = 80, 30
   end
+  w.telemetry4High = clamp(w.telemetry4High or w.field4High or 80, 0, 10000)
+  w.telemetry4Mid = clamp(w.telemetry4Mid or w.field4Mid or 30, 0, 10000)
+  w.telemetry4Mode = w.telemetry4Mode == 2 and 2 or 1
 end
 
 local function read(w, validLanguage)

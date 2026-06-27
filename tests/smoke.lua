@@ -8,7 +8,6 @@ lcd = setmetatable({
   loadBitmap = function() return {} end,
   drawFilledCircle = noop,
   drawCircle = noop,
-  drawAnnulusSector = noop,
   invalidate = noop,
 }, {__index = function() return noop end})
 
@@ -73,6 +72,8 @@ assert(sourceIndex["Timer"] == nil)
 assert(lineIndex["Flights"] < lineIndex["Power / Battery / Fuel"])
 assert(lineIndex["Battery/Fuel percentage scoring"] == nil)
 assert(widget.field4Mode == nil)
+assert(lineIndex["Telemetry 4 scoring"] ~= nil)
+assert(widget.telemetry4Mode == 1)
 assert(widget.flightCount == 0)
 
 registered.paint(widget)
