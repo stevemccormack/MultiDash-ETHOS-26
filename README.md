@@ -13,6 +13,7 @@ ETHOS 1.6 or Newer
 ## Tested Hardware
 
 FrSky X18  
+FrSky X18SE
 FrSky X18RS
 
 Partially simulator-tested on:
