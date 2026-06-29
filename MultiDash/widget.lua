@@ -1,6 +1,8 @@
 local i18n = assert(loadfile("i18n.lua"))()
 local summaryModule
 local summaryApi
+local LINK_MIN_GRACE = 3
+local currentFont
 local function T(widget, key) return i18n.text(widget, key) end
 local function getTextW(txt)
     if lcd and type(lcd.getTextSize) == "function" then
@@ -10,6 +12,7 @@ local function getTextW(txt)
     return 0
 end
 local function clamp(v, lo, hi)
+    v = tonumber(v) or 0
     if lo and v < lo then
         v = lo
     end
@@ -139,6 +142,8 @@ local function setAvailableFont(...)
     for i = 1, select("#", ...) do
         local f = _G[select(i, ...)]
         if f ~= nil then
+            if f == currentFont then return end
+            currentFont = f
             pcall(lcd.font, f)
             return
         end
@@ -261,13 +266,22 @@ local function getVal(src)
         return 0
     end
     local t = type(src)
+    if t == "number" then
+        return src
+    end
+    if t == "string" then
+        local direct = tonumber(src)
+        if direct then
+            return direct
+        end
+    end
     if t == "table" or t == "userdata" then
         if type(src.value) == "function" then
             local ok, value = pcall(src.value, src)
-            return ok and value or 0
+            return ok and (tonumber(value) or 0) or 0
         end
-        if type(src.value) == "number" then
-            return src.value
+        if type(src.value) == "number" or type(src.value) == "string" then
+            return tonumber(src.value) or 0
         end
     end
     local s
@@ -277,7 +291,7 @@ local function getVal(src)
     end
     if s and type(s.value) == "function" then
         local ok, value = pcall(s.value, s)
-        return ok and value or 0
+        return ok and (tonumber(value) or 0) or 0
     end
     return 0
 end
@@ -583,6 +597,9 @@ local function create()
         telemetry4High = 80,
         telemetry4Mid = 30,
         telemetry4Mode = 1,
+        linkMin = nil,
+        linkMinSource = nil,
+        linkSeenAt = nil,
         flightActive = false,
         postFlight = false,
         flightStart = 0,
@@ -593,11 +610,16 @@ local function create()
         nextRefresh = 0,
     }
 end
+local storageModule
 local function storageCall(method, widget)
-    local chunk = loadfile("storage.lua")
-    if not chunk then return false end
-    local ok, module = pcall(chunk)
-    local fn = ok and type(module) == "table" and module[method]
+    if not storageModule then
+        local chunk = loadfile("storage.lua")
+        if not chunk then return false end
+        local ok, module = pcall(chunk)
+        if not ok or type(module) ~= "table" then return false end
+        storageModule = module
+    end
+    local fn = storageModule[method]
     if type(fn) ~= "function" then return false end
     return fn(widget, i18n.valid)
 end
@@ -861,8 +883,17 @@ local function updateStats(w)
 end
 local function updateFlight(w, now)
     now = now or os.clock()
-    local armed = switchActive(w.armSwitch, w.armSwitchKey)
-    if w.armSwitchKey and (w.armSwitchReverse or 1) == 2 then
+    local sw = w.armSwitch
+    if type(sw) == "string" or type(sw) == "number" then
+        sw = resolveSwitch(sw)
+        w.armSwitch = sw
+    end
+    if not sw and w.armSwitchKey then
+        sw = resolveSwitch(w.armSwitchKey)
+        w.armSwitch = sw
+    end
+    local armed = sw and switchActive(sw) or false
+    if sw and (w.armSwitchReverse or 1) == 2 then
         armed = not armed
     end
     if armed then
@@ -885,14 +916,39 @@ local function updateFlight(w, now)
     if not armed then
         w.armSeenAt = nil
         if w.flightActive then
+            w.flightTime = now - (w.flightStart or now)
+            updateStats(w)
+            w.flightActive = false
+            w.postFlight = true
             if (w.flightTime or 0) >= 15 then
                 w.flightCount = (tonumber(w.flightCount) or 0) + 1
                 w.dirty = true
                 w.dirtyAt = now
             end
-            w.flightActive = false
-            w.postFlight = true
         end
+    end
+end
+local function updateLinkMinimum(w, now)
+    local src = w.rssiSource
+    if not src then
+        w.linkMin, w.linkMinSource, w.linkSeenAt = nil, nil, nil
+        return
+    end
+    if w.linkMinSource ~= src then
+        w.linkMinSource, w.linkSeenAt, w.linkMin = src, nil, nil
+    end
+    local link = clamp(tonumber(getVal(src)) or 0, 0, 100)
+    if not w.linkSeenAt then
+        if link > 0 then
+            w.linkSeenAt = now
+        end
+        return
+    end
+    if now - w.linkSeenAt < LINK_MIN_GRACE then
+        return
+    end
+    if w.linkMin == nil or link < w.linkMin then
+        w.linkMin = link
     end
 end
 local sourceValidityMethods = {
@@ -968,13 +1024,16 @@ local function drawNoTelemetry(w, c, scrW, scrH)
         roundPanel(warnX, warnY, scrW - warnX * 2, warnH, px(8, scale, 4, 10), c.alertBg, c.alertOutline)
         local msg = T(w, "NO TELEMETRY")
         setFontSize("huge", scale)
-        if getTextW(msg) > scrW - 8 then
+        local msgW = getTextW(msg) or 0
+        if msgW > scrW - 8 then
             setFontSize("large", scale)
+            msgW = getTextW(msg) or 0
         end
-        if getTextW(msg) > scrW - 8 then
+        if msgW > scrW - 8 then
             setFontSize("small", scale)
+            msgW = getTextW(msg) or 0
         end
-        local x = math.floor((scrW - (getTextW(msg) or 0)) / 2)
+        local x = math.floor((scrW - msgW) / 2)
         local y = warnY + math.floor(warnH * 0.3)
         if c.alertOutline then
             local o = px(2, scale, 1, 2)
@@ -987,6 +1046,38 @@ local function drawNoTelemetry(w, c, scrW, scrH)
         lcd.color(c.alertText)
         lcd.drawText(x, y, msg)
     end
+end
+local function drawLinkMinText(w, scale, x, y, width, height)
+    local value = w.linkMin
+    local txt = T(w, "Min") .. ": " .. (value ~= nil and (tostring(math.floor(value + 0.5)) .. "%") or "--")
+    if value ~= nil then
+        local innerX = x + 2
+        local innerW = math.max(1, width - 4)
+        local markerW = px(2, scale, 1, 3)
+        local markerX = innerX + math.floor(innerW * clamp(value, 0, 100) / 100)
+        markerX = clamp(markerX, innerX, innerX + innerW - markerW)
+        local markerY = y + 2
+        local markerH = math.max(1, height - 4)
+        lcd.color(lcd.RGB(0, 0, 0))
+        lcd.drawFilledRectangle(markerX - 1, markerY, markerW + 2, markerH)
+        lcd.color(lcd.RGB(255, 255, 255))
+        lcd.drawFilledRectangle(markerX, markerY, markerW, markerH)
+    end
+    setFontSize("small", scale)
+    local tw = getTextW(txt) or 0
+    if tw > width - 4 then
+        return
+    end
+    local tx = x + math.floor((width - tw) / 2)
+    local ty = y + math.max(0, math.floor((height - px(22, scale, 14, 28)) / 2) - px(5, scale, 2, 7))
+    local o = px(1, scale, 1, 2)
+    lcd.color(lcd.RGB(0, 0, 0))
+    lcd.drawText(tx - o, ty, txt)
+    lcd.drawText(tx + o, ty, txt)
+    lcd.drawText(tx, ty - o, txt)
+    lcd.drawText(tx, ty + o, txt)
+    lcd.color(lcd.RGB(255, 255, 255))
+    lcd.drawText(tx, ty, txt)
 end
 local function drawSourceRight(src, fallback, rightX, y, suffix)
     if not src then
@@ -1140,7 +1231,8 @@ local function drawFuelGauge(w, c, scale, mainLeft, mainW, topY, bottomY, fuelVa
             setFontSize("huge", scale)
             local inset = px(12, scale, 6, 18)
             local voltageX = math.max(mainLeft, cx - r + inset)
-            local percentX = math.min(mainLeft + mainW - (getTextW(percentText) or 0), cx + r - inset - (getTextW(percentText) or 0))
+            local percentW = getTextW(percentText) or 0
+            local percentX = math.min(mainLeft + mainW - percentW, cx + r - inset - percentW)
             lcd.color(voltageColor or percentColor)
             drawHeavyText(voltageX, percentY, voltageText, labelWeight)
             lcd.color(percentColor)
@@ -1228,9 +1320,9 @@ local function drawInFlight(w, c, scale, scrW, scrH)
     if w.rssiSource then
         linkCol = score(w, "link", link, c)
     end
+    local linkLabel = sourceName(w.rssiSource, T(w, "Link"))
     lcd.color(linkCol)
     setFontSize("large", scale)
-    local linkLabel = sourceName(w.rssiSource, T(w, "Link"))
     lcd.drawText(linkX, topY, string.format("%s: %d%%", linkLabel, math.floor(link)))
     roundPanel(linkX, linkY, linkBarW, linkBarH, px(6, scale, 3, 8), c.bg, c.barFrame)
     lcd.color(linkCol)
@@ -1238,6 +1330,7 @@ local function drawInFlight(w, c, scale, scrW, scrH)
     if fillW > 0 then
         lcd.drawFilledRectangle(linkX + 2, linkY + 2, fillW, linkBarH - 4)
     end
+    drawLinkMinText(w, scale, linkX, linkY, linkBarW, linkBarH)
     if gaugeMode then
         local fuelLeft = margin
         local fuelRight = rightX - px(8, scale, 4, 14)
@@ -1370,6 +1463,7 @@ local function drawInFlight(w, c, scale, scrW, scrH)
     lcd.drawText(tx, ty, timeText)
 end
 local function paint(w, ...)
+    currentFont = nil
     local scrW, scrH = windowSize(...)
     local scale = scaleFor(scrW, scrH)
     local visualScale = scale * 1.1
@@ -1582,6 +1676,7 @@ local function paint(w, ...)
             lcd.drawFilledRectangle(xOff, barY + inset, segW, bH2 - inset * 2)
         end
     end
+    drawLinkMinText(w, scale, bx2, barY, bW2, bH2)
     if w.rpmSource then
         local rpm = getVal(w.rpmSource)
         local rpmTxt = "RPM: " .. formatValue(rpm)
@@ -1623,6 +1718,7 @@ local function wakeup(w)
     local now = os.clock()
     if now >= (w.nextRefresh or 0) then
         updateFlight(w, now)
+        updateLinkMinimum(w, now)
         w.nextRefresh = now + 0.1
         if lcd and type(lcd.invalidate) == "function" then
             pcall(lcd.invalidate)
