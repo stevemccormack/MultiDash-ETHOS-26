@@ -1319,9 +1319,9 @@ local function drawInFlightStat(w, c, scale, x, y, width, src, fallback, key, ro
     end
     rowH = rowH or px(108, scale, 82, 126)
     local padX = px(18, scale, 12, 24)
-    local compact = rowH < px(56, scale, 42, 60)
+    local compact = rowH < px(48, scale, 42, 52)
     local padY = compact and px(3, scale, 2, 5) or px(12, scale, 8, 16)
-    local valueY = compact and px(18, scale, 16, 22) or px(34, scale, 22, 40)
+    local valueY = compact and px(20, scale, 18, 24) or px(34, scale, 22, 40)
     local v = getVal(src)
     if not key then
         key = statKeyForSource(w, src)
