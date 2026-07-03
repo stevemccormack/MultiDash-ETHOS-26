@@ -1,7 +1,7 @@
 local i18n = assert(loadfile("i18n.lua"))()
 local summaryModule
 local summaryApi
-local LINK_MIN_GRACE = 3
+local LINK_MIN_GRACE = 5
 local currentFont
 local storageModule
 local function T(widget, key) return i18n.text(widget, key) end
