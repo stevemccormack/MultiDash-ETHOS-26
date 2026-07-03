@@ -2,7 +2,6 @@ local function configure(w, api)
   if not form or type(form.addLine) ~= "function" then return end
   local clamp = api.clamp
   local T = function(key) return api.tr(w, key) end
-  local armChoices = {"Off", "SA", "SB", "SC", "SD", "SE", "SF", "SG", "SH"}
   local batteryTypes = {"LiPo", "LiHV", "Li-ion", "LiFe", "NiCd"}
   local languageNames = {
     "English", "Deutsch", "Espanol", "Francais", "Italiano", "Polski",
@@ -20,32 +19,6 @@ local function configure(w, api)
     return function(value)
       setter(value)
       w.dirty, w.dirtyAt = true, os.clock()
-    end
-  end
-
-  local function armSwitchIndex()
-    local key = w.armSwitchKey
-    if not key and w.armSwitch then
-      if type(w.armSwitch.name) == "function" then
-        local ok, name = pcall(w.armSwitch.name, w.armSwitch)
-        if ok then key = name end
-      end
-      key = key or tostring(w.armSwitch)
-    end
-    key = key and (tostring(key):match("S[A-H]") or tostring(key):match("s[a-h]"))
-    key = key and key:upper() or ""
-    for i = 1, #armChoices do
-      if armChoices[i] == key then return i end
-    end
-    return 1
-  end
-
-  local function setArmSwitchIndex(value)
-    local key = armChoices[clamp(math.floor(tonumber(value) or 1), 1, #armChoices)]
-    if key == "Off" then
-      w.armSwitchKey, w.armSwitch = nil, nil
-    else
-      w.armSwitchKey, w.armSwitch = key, api.resolveSwitch(key)
     end
   end
 
@@ -88,6 +61,17 @@ local function configure(w, api)
     addNumber(label, 1, #choices, get, set, 0)
   end
 
+  local function addToggle(label, get, set)
+    local setter = changed(set)
+    if form.addBooleanField then
+      local line = form.addLine(label)
+      if pcall(form.addBooleanField, line, nil, get, setter) then return end
+      if pcall(form.addBooleanField, line, get, setter) then return end
+    end
+    addChoice(label, {T("Off"), T("On")}, function() return get() and 2 or 1 end,
+      function(value) set(tonumber(value) == 2) end)
+  end
+
   local function addSource(label, key, resetCells)
     local line = form.addLine(T(label))
     if form.addSourceField then
@@ -95,6 +79,18 @@ local function configure(w, api)
       local set = changed(function(value)
         w[key] = value
         if resetCells then w.detectedCells = nil end
+      end)
+      if pcall(form.addSourceField, line, nil, get, set) then return end
+      pcall(form.addSourceField, line, get, set)
+    end
+  end
+
+  local function addArmSource()
+    local line = form.addLine(T("Arm switch"))
+    if form.addSourceField then
+      local get = function() return w.armSwitch end
+      local set = changed(function(value)
+        w.armSwitch, w.armSwitchKey = value, nil
       end)
       if pcall(form.addSourceField, line, nil, get, set) then return end
       pcall(form.addSourceField, line, get, set)
@@ -136,16 +132,20 @@ local function configure(w, api)
   addChoice(T("Theme"), {T("Dark"), T("Light")},
     function() return w.themeMode or 1 end,
     function(value) w.themeMode = tonumber(value) == 2 and 2 or 1 end)
-  addChoice(T("Arm switch"), armChoices, armSwitchIndex, setArmSwitchIndex)
-  addChoice(T("Arm switch direction"), {T("Normal"), T("Reversed")},
-    function() return w.armSwitchReverse or 1 end,
-    function(value) w.armSwitchReverse = tonumber(value) == 2 and 2 or 1 end)
+  addArmSource()
+  addToggle(T("Reversed"),
+    function() return (w.armSwitchReverse or 1) == 2 end,
+    function(value) w.armSwitchReverse = value and 2 or 1 end)
   addNumber(T("Arming delay"), 0, 60,
     function() return w.armDelay or 5 end,
     function(value) w.armDelay = clamp(tonumber(value) or 0, 0, 60) end, 0)
   addNumber(T("Flights"), 0, 9999,
     function() return w.flightCount or 0 end,
     function(value) w.flightCount = clamp(math.floor(tonumber(value) or 0), 0, 9999) end, 0)
+  addSource("Status bar source", "statusSource")
+  addChoice(T("Status active when"), {T("Positive"), T("Negative"), T("Non-zero")},
+    function() return w.statusMode or 1 end,
+    function(value) w.statusMode = clamp(math.floor(tonumber(value) or 1), 1, 3) end)
 
   form.addLine(T("Power / Battery / Fuel"))
   addChoice(T("Power Source Type"), {T("Battery"), T("Fuel")},
