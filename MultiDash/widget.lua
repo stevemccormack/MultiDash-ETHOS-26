@@ -3,6 +3,7 @@ local summaryModule
 local summaryApi
 local LINK_MIN_GRACE = 3
 local currentFont
+local storageModule
 local function T(widget, key) return i18n.text(widget, key) end
 local function getTextW(txt)
     if lcd and type(lcd.getTextSize) == "function" then
@@ -10,6 +11,13 @@ local function getTextW(txt)
         if ok then return w or 0 end
     end
     return 0
+end
+local function getTextH(txt)
+    if lcd and type(lcd.getTextSize) == "function" then
+        local ok, _, h = pcall(lcd.getTextSize, txt or "")
+        if ok then return h or 18 end
+    end
+    return 18
 end
 local function clamp(v, lo, hi)
     v = tonumber(v) or 0
@@ -142,7 +150,9 @@ local function setAvailableFont(...)
     for i = 1, select("#", ...) do
         local f = _G[select(i, ...)]
         if f ~= nil then
-            if f == currentFont then return end
+            if f == currentFont then
+                return
+            end
             currentFont = f
             pcall(lcd.font, f)
             return
@@ -327,9 +337,9 @@ local function resolveSwitch(val)
     end
     for i = 1, #tries do
         local k = tries[i]
-        if system and type(system.getSwitch) == "function" then
+        if system and type(system.getSource) == "function" then
             local ok, sw = pcall(function()
-                return system.getSwitch(k)
+                return system.getSource(k)
             end)
             if ok and sw then
                 return sw
@@ -338,9 +348,9 @@ local function resolveSwitch(val)
     end
     for i = 1, #tries do
         local k = tries[i]
-        if system and type(system.getSource) == "function" then
+        if system and type(system.getSwitch) == "function" then
             local ok, sw = pcall(function()
-                return system.getSource(k)
+                return system.getSwitch(k)
             end)
             if ok and sw then
                 return sw
@@ -527,7 +537,35 @@ local function fitText(txt, maxW)
     end
     return txt .. "."
 end
-local function switchActive(sw, key)
+local function fitStatusText(label, state, maxW, scale)
+    local suffix = ": " .. state
+    local txt = label .. suffix
+    setFontSize("large", scale)
+    if getTextW(txt) <= maxW then
+        return txt
+    end
+    setFontSize("small", scale)
+    if getTextW(txt) <= maxW then
+        return txt
+    end
+    local suffixW = getTextW(suffix)
+    if suffixW >= maxW then
+        return fitText(txt, maxW)
+    end
+    return fitText(label, maxW - suffixW) .. suffix
+end
+local function armValueActive(value, reversed)
+    if type(value) == "boolean" then
+        return reversed and not value or value
+    end
+    value = tonumber(value) or 0
+    if reversed then
+        return value < 0
+    end
+    return value > 0
+end
+local function switchActive(sw, key, direction)
+    local reversed = tonumber(direction) == 2
     if not sw and key then
         sw = resolveSwitch(key)
     end
@@ -535,8 +573,16 @@ local function switchActive(sw, key)
         return false
     end
     local t = type(sw)
-    if t == "string" or t == "number" then
-        return switchActive(resolveSwitch(sw), sw)
+    if t == "number" then
+        return armValueActive(sw, reversed)
+    end
+    if t == "string" then
+        local value = tonumber(sw)
+        if value then
+            return armValueActive(value, reversed)
+        end
+        local resolved = resolveSwitch(sw)
+        return resolved and resolved ~= sw and switchActive(resolved, nil, direction) or false
     end
     if t == "table" or t == "userdata" then
         if type(sw.active) == "function" then
@@ -544,7 +590,7 @@ local function switchActive(sw, key)
                 return sw:active()
             end)
             if ok then
-                return v and true or false
+                return armValueActive(v, reversed)
             end
         end
         if type(sw.value) == "function" then
@@ -552,14 +598,14 @@ local function switchActive(sw, key)
                 return sw:value()
             end)
             if ok then
-                return (tonumber(v) or 0) > 0
+                return armValueActive(v, reversed)
             end
         end
-        if type(sw.value) == "number" then
-            return sw.value > 0
+        if type(sw.value) == "number" or type(sw.value) == "string" then
+            return armValueActive(sw.value, reversed)
         end
     end
-    return getVal(sw) > 0
+    return armValueActive(getVal(sw), reversed)
 end
 local function create()
     return {
@@ -574,6 +620,7 @@ local function create()
         batteryStyle = 1,
         powerSourceType = 1,
         fuelShowPercent = 1,
+        statusMode = 1,
         battHigh = 4.15,
         battMid = 3.75,
         battLow = 3.45,
@@ -610,7 +657,6 @@ local function create()
         nextRefresh = 0,
     }
 end
-local storageModule
 local function storageCall(method, widget)
     if not storageModule then
         local chunk = loadfile("storage.lua")
@@ -632,7 +678,6 @@ local function configure(widget)
     if ok and module and module.configure then
         module.configure(widget, {
             clamp = clamp,
-            resolveSwitch = resolveSwitch,
             languageCodes = i18n.codes,
             tr = i18n.text,
         })
@@ -883,19 +928,7 @@ local function updateStats(w)
 end
 local function updateFlight(w, now)
     now = now or os.clock()
-    local sw = w.armSwitch
-    if type(sw) == "string" or type(sw) == "number" then
-        sw = resolveSwitch(sw)
-        w.armSwitch = sw
-    end
-    if not sw and w.armSwitchKey then
-        sw = resolveSwitch(w.armSwitchKey)
-        w.armSwitch = sw
-    end
-    local armed = sw and switchActive(sw) or false
-    if sw and (w.armSwitchReverse or 1) == 2 then
-        armed = not armed
-    end
+    local armed = switchActive(w.armSwitch, w.armSwitchKey, w.armSwitchReverse)
     if armed then
         if not w.armSeenAt then
             w.armSeenAt = now
@@ -1096,6 +1129,36 @@ local function drawCurrentRight(w, rightX, y, scale)
     lcd.drawText(x, y, txt)
     lcd.drawText(x + bold, y, txt)
 end
+local function statusActive(w)
+    local value = getVal(w.statusSource)
+    local mode = tonumber(w.statusMode) or 1
+    if mode == 2 then
+        return value < 0, value
+    end
+    if mode == 3 then
+        return value ~= 0, value
+    end
+    return value > 0, value
+end
+local function drawStatusBar(w, c, scale, x, y, width, height)
+    if not w.statusSource then
+        return false
+    end
+    local active = statusActive(w)
+    local fill = active and c.good or c.bad
+    local label = sourceName(w.statusSource, T(w, "Status"))
+    local state = active and "ON" or "OFF"
+    local pad = px(8, scale, 4, 12)
+    local txt = fitStatusText(label, state, width - pad * 2, scale)
+    roundPanel(x, y, width, height, px(7, scale, 3, 9), fill, c.outline)
+    local tx = x + math.floor((width - (getTextW(txt) or 0)) / 2)
+    local ty = y + math.max(1, math.floor((height - getTextH(txt)) / 2))
+    local bold = px(1, scale, 1, 2)
+    lcd.color(lcd.RGB(0, 0, 0))
+    lcd.drawText(tx, ty, txt)
+    lcd.drawText(tx + bold, ty, txt)
+    return true
+end
 local function statKeyForSource(w, src)
     if not src then
         return nil
@@ -1256,7 +1319,9 @@ local function drawInFlightStat(w, c, scale, x, y, width, src, fallback, key, ro
     end
     rowH = rowH or px(108, scale, 82, 126)
     local padX = px(18, scale, 12, 24)
-    local padY = px(12, scale, 8, 16)
+    local compact = rowH < px(56, scale, 42, 60)
+    local padY = compact and px(3, scale, 2, 5) or px(12, scale, 8, 16)
+    local valueY = compact and px(18, scale, 16, 22) or px(34, scale, 22, 40)
     local v = getVal(src)
     if not key then
         key = statKeyForSource(w, src)
@@ -1266,17 +1331,17 @@ local function drawInFlightStat(w, c, scale, x, y, width, src, fallback, key, ro
         col = score(w, key, v, c)
     end
     local innerW = width - padX * 2
+    setFontSize("small", scale)
     local label = fitText(sourceName(src, fallback), innerW)
     lcd.color(c.muted)
-    setFontSize("small", scale)
     lcd.drawText(x + padX, y + padY, label)
     lcd.color(col)
-    setFontSize("medium", scale)
+    setFontSize(compact and "small" or "medium", scale)
     local txt = formatValue(v)
     if key == "field4" then
         txt = txt .. "%"
     end
-    lcd.drawText(x + width - padX - (getTextW(txt) or 0), y + padY + px(34, scale, 22, 40), txt)
+    lcd.drawText(x + width - padX - (getTextW(txt) or 0), y + padY + valueY, txt)
     return y + rowH
 end
 local function drawInFlight(w, c, scale, scrW, scrH)
@@ -1441,7 +1506,7 @@ local function drawInFlight(w, c, scale, scrW, scrH)
     local statBottom = scrH - px(18, scale, 10, 26)
     local statGap = px(1, scale, 0, 3)
     local statRowH = math.floor((statBottom - statTop - statGap * 3) / 4)
-    statRowH = clamp(statRowH, px(62, scale, 48, 70), px(92, scale, 70, 100))
+    statRowH = clamp(statRowH, px(28, scale, 28, 36), px(92, scale, 70, 100))
     local statY = statTop
     statY = drawInFlightStat(w, c, scale, rightX, statY, rightW, w.inFlight1Source, T(w, "Stat 1"), nil, statRowH) + statGap
     statY = drawInFlightStat(w, c, scale, rightX, statY, rightW, w.inFlight2Source, T(w, "Stat 2"), nil, statRowH) + statGap
@@ -1612,9 +1677,21 @@ local function paint(w, ...)
     setFontSize("huge", timerScale)
     local timerText = formatTime(w.flightTime or 0)
     local timerY = scrH - px(70, scale, 34, 84)
+    local statusH, statusW, statusY
+    if w.statusSource then
+        statusH = px(32, scale, 24, 40)
+        statusW = px(220, scale, 130, math.floor(scrW * 0.36))
+        local gapY = px(5, scale, 3, 8)
+        local timerH = math.max(getTextH(timerText), px(44, timerScale, 28, 60))
+        timerY = timerY - statusH - gapY
+        statusY = math.min(scrH - statusH - px(2, scale, 1, 4), timerY + timerH + gapY)
+    end
     setFontSize("small", scale)
     local flightsText = T(w, "Flights") .. ": " .. tostring(math.floor(tonumber(w.flightCount) or 0))
     local flightsY = timerY - px(34, scale, 24, 40)
+    if w.statusSource then
+        drawStatusBar(w, c, scale, margin, statusY, statusW, statusH)
+    end
     local flightsBold = px(1, scale, 1, 2)
     lcd.color(c.secondary)
     lcd.drawText(margin, flightsY, flightsText)

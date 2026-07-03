@@ -6,6 +6,7 @@ local sourceKeys = {
   field3 = "field3Source",
   field4 = "field4Source",
   telemetry4 = "telemetry4Source",
+  status = "statusSource",
   inFlight1 = "inFlight1Source",
   inFlight2 = "inFlight2Source",
   inFlight3 = "inFlight3Source",
@@ -14,7 +15,7 @@ local sourceKeys = {
   rpm = "rpmSource",
 }
 local sourceOrder = {
-  "battery", "link", "field1", "field2", "field3", "field4", "telemetry4",
+  "battery", "link", "field1", "field2", "field3", "field4", "telemetry4", "status",
   "inFlight1", "inFlight2", "inFlight3", "inFlight4", "current", "rpm",
 }
 local thresholdKeys = {"batt", "fuel", "link", "current", "field1", "field2", "field3", "field4", "telemetry4"}
@@ -90,6 +91,7 @@ local function write(w, validLanguage)
     file:write("batteryStyle=", tostring(w.batteryStyle or 1), "\n")
     file:write("powerSourceType=", tostring(w.powerSourceType or 1), "\n")
     file:write("fuelShowPercent=", tostring(w.fuelShowPercent or 1), "\n")
+    file:write("statusMode=", tostring(w.statusMode or 1), "\n")
     file:write("flightCount=", tostring(w.flightCount or 0), "\n")
     file:write("language=", validLanguage(w.language), "\n")
     for i = 1, #thresholdKeys do
@@ -139,7 +141,7 @@ local function read(w, validLanguage)
           assignSource(w, sourceKeys[name], value)
         elseif name == "arm" then
           w.armSwitchKey = value
-          w.armSwitch = resolve("getSwitch", value) or resolve("getSource", value)
+          w.armSwitch = resolve("getSource", value) or resolve("getSwitch", value)
         elseif name == "image" then
           w.imageFile = value
         elseif name == "language" then
@@ -156,6 +158,7 @@ local function read(w, validLanguage)
             elseif name == "batteryStyle" then w.batteryStyle = n == 2 and 2 or 1
             elseif name == "powerSourceType" then w.powerSourceType = n == 2 and 2 or 1
             elseif name == "fuelShowPercent" then w.fuelShowPercent = n == 2 and 2 or 1
+            elseif name == "statusMode" then w.statusMode = clamp(math.floor(n), 1, 3)
             elseif name == "flightCount" then w.flightCount = clamp(math.floor(n), 0, 9999)
             elseif w[name] ~= nil then w[name] = n end
           end
