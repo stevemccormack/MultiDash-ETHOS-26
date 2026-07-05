@@ -69,17 +69,25 @@ MultiDash is designed for the large ETHOS widget size that keeps the normal syst
 
 ## Major Features
 
+- ETHOS 1.6+ support, including ETHOS 26
 - Pre-flight, in-flight, and color-coded flight-summary screens
-- Battery tower or dial with automatic percentage calculation
+- Automatic no-telemetry warning
+- Battery tower or round gauge display
+- Fuel-style round gauge can be used with battery voltage telemetry through Battery mode
+- Battery percentage calculated from voltage when no percentage sensor is selected
 - 1S through 12S support for LiPo, LiHV, Li-ion, LiFe, and NiCd
-- Separate fuel mode for 0-100% fuel sensors
+- Fuel mode for 0-100% fuel or tank sensors
 - Link quality bar, current, RPM, and four configurable telemetry fields
+- Link quality bar shows session minimum text and a marker after a 5-second startup grace period
+- Optional main-screen status bar for switch-style sources such as FrSky Remote NFC values
 - Four configurable in-flight telemetry fields
-- Normal or reversed arming switch with an adjustable delay
+- Source-based arming with normal or reversed direction and adjustable delay
+- Post-flight summary appears immediately on disarm
 - Automatic flight timer and persistent flight counter
 - Minimum and maximum statistics with adjustable warning thresholds
 - Dark and light themes, per-model settings, and model images
 - Nine selectable languages
+- Split-file layout with lazy-loaded settings, storage, translations, and summary code
 
 Flights lasting at least 15 seconds are added to the flight counter. The count can also be edited in widget settings.
 
