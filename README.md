@@ -73,7 +73,6 @@ MultiDash is designed for the large ETHOS widget size that keeps the normal syst
 - Pre-flight, in-flight, and color-coded flight-summary screens
 - Automatic no-telemetry warning
 - Battery tower or round gauge display
-- Fuel-style round gauge can be used with battery voltage telemetry through Battery mode
 - Battery percentage calculated from voltage when no percentage sensor is selected
 - 1S through 12S support for LiPo, LiHV, Li-ion, LiFe, and NiCd
 - Fuel mode for 0-100% fuel or tank sensors
