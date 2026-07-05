@@ -57,20 +57,13 @@ local function windowSize(a, b, c, d)
     end
     return tonumber(w) or 480, tonumber(h) or 320
 end
-local singleLargeSizes = {
-    ["784x294"] = true, ["784x316"] = true,
-    ["472x191"] = true, ["472x210"] = true,
-    ["630x236"] = true, ["630x258"] = true,
-}
-local fullScreenSizes = {
-    ["800x458"] = true, ["800x480"] = true,
-    ["480x301"] = true, ["480x320"] = true, ["480x272"] = true,
-    ["640x338"] = true, ["640x360"] = true,
-}
 local function isUsableWidgetSize(w, h)
-    local key = tostring(math.floor(w)) .. "x" .. tostring(math.floor(h))
-    if singleLargeSizes[key] then return true end
-    if fullScreenSizes[key] then return false end
+    w, h = math.floor(w), math.floor(h)
+    if (w == 784 and (h == 294 or h == 316))
+        or (w == 472 and (h == 191 or h == 210))
+        or (w == 630 and (h == 236 or h == 258)) then
+        return true
+    end
     if w < 460 or h < 185 then return false end
     local ratio = w / h
     return ratio >= 1.95 and ratio <= 3.35
@@ -911,16 +904,16 @@ local function updateStats(w)
         pushStat(w, "rpm", sourceName(w.rpmSource, "RPM"), getVal(w.rpmSource))
     end
     if w.field1Source then
-        pushStat(w, "field1", sourceName(w.field1Source, T(w, "Telemetry 1")), getVal(w.field1Source))
+        pushStat(w, "field1", sourceName(w.field1Source, "Tlm 1"), getVal(w.field1Source))
     end
     if w.field2Source then
-        pushStat(w, "field2", sourceName(w.field2Source, T(w, "Telemetry 2")), getVal(w.field2Source))
+        pushStat(w, "field2", sourceName(w.field2Source, "Tlm 2"), getVal(w.field2Source))
     end
     if w.field3Source then
-        pushStat(w, "field3", sourceName(w.field3Source, T(w, "Telemetry 3")), getVal(w.field3Source))
+        pushStat(w, "field3", sourceName(w.field3Source, "Tlm 3"), getVal(w.field3Source))
     end
     if w.telemetry4Source then
-        pushStat(w, "telemetry4", sourceName(w.telemetry4Source, T(w, "Telemetry 4")), getVal(w.telemetry4Source))
+        pushStat(w, "telemetry4", sourceName(w.telemetry4Source, "Tlm 4"), getVal(w.telemetry4Source))
     end
     if percent ~= nil and (w.powerSourceType or 1) ~= 2 then
         pushStat(w, "field4", sourceName(w.field4Source, T(w, "Battery percentage")), percent)
@@ -1134,9 +1127,6 @@ local function statusActive(w)
     local mode = tonumber(w.statusMode) or 1
     if mode == 2 then
         return value < 0, value
-    end
-    if mode == 3 then
-        return value ~= 0, value
     end
     return value > 0, value
 end
@@ -1369,6 +1359,8 @@ local function drawInFlight(w, c, scale, scrW, scrH)
     end
     lcd.color(c.bg)
     lcd.drawFilledRectangle(0, 0, scrW, scrH)
+    local x18Widget = scrW <= 500
+    local x18ShortWidget = x18Widget and scrH < 200
     local margin = px(18, scale, 6, math.floor(scrW * 0.045))
     local rightW = px(250, scale, 150, math.floor(scrW * 0.38))
     local rightX = scrW - margin - rightW
@@ -1403,24 +1395,25 @@ local function drawInFlight(w, c, scale, scrW, scrH)
         local fuelTop = linkY + linkBarH + px(92, scale, 54, 118) + 4
         local fuelBottom = scrH - px(82, scale, 44, 94) + px(62, scale, 36, 80) + 4
         local fuelCx = fuelLeft + math.floor(fuelW * 0.38) + px(14, scale, 8, 20)
+        local gaugeScale = x18ShortWidget and 2.02 or (x18Widget and 1.75 or 1.42)
         if batteryGauge then
             local percent = batteryFuelPercent(w, batt) or 0
             local drop = px(6, scale, 4, 10) - 5
             drawFuelGauge(w, c, scale, fuelLeft, fuelW, fuelTop + drop, fuelBottom + drop,
-                percent, 1.42, fuelCx, fuelBottom + drop, true, batt, battCol, true)
+                percent, gaugeScale, fuelCx, fuelBottom + drop, true, batt, battCol, true)
         else
-            drawFuelGauge(w, c, scale, fuelLeft, fuelW, fuelTop, fuelBottom, batt, 1.42, fuelCx, fuelBottom)
+            drawFuelGauge(w, c, scale, fuelLeft, fuelW, fuelTop, fuelBottom, batt, gaugeScale, fuelCx, fuelBottom)
         end
         if w.currentSource then
             setFontSize("small", scale)
             lcd.color(c.secondary)
-            local currentText = T(w, "Curr") .. " " .. formatValue(getVal(w.currentSource)) .. "A"
+            local currentText = T(w, "Current") .. " " .. formatValue(getVal(w.currentSource)) .. "A"
             lcd.drawText(fuelRight - (getTextW(currentText) or 0), fuelTop + px(2, scale, 1, 4), currentText)
         end
     else
         local timerH = px(70, scale, 42, 86)
         local battTop = linkY + linkBarH + px(20, scale, 10, 28)
-        local battBottom = scrH - timerH - px(48, scale, 30, 62)
+        local battBottom = scrH - timerH - px(x18Widget and 22 or 48, scale, x18Widget and 12 or 30, x18Widget and 34 or 62)
         local mainLeft = margin
         local mainRight = rightX - px(24, scale, 12, 32)
         if mainRight < mainLeft + px(220, scale, 150, 260) then
@@ -1428,7 +1421,10 @@ local function drawInFlight(w, c, scale, scrW, scrH)
         end
         local mainW = mainRight - mainLeft
         local battW = clamp(math.floor(mainW * 0.94), px(250, scale, 170, 340), mainW)
-        local maxBattH = math.max(px(80, scale, 54, 96), battBottom - battTop - px(48, scale, 28, 58))
+        local maxBattH = math.max(px(80, scale, 54, 96),
+            battBottom - battTop - px(x18ShortWidget and 8 or (x18Widget and 18 or 48),
+                scale, x18ShortWidget and 4 or (x18Widget and 10 or 28),
+                x18ShortWidget and 14 or (x18Widget and 30 or 58)))
         local battH = clamp(math.floor(battW * 0.46), px(96, scale, 62, 118), math.min(px(190, scale, 118, 220), maxBattH))
         local bx = mainLeft + math.floor((mainW - battW) * 0.72)
         local by = math.max(battTop, battTop + math.floor((battBottom - battTop - battH) / 2))
@@ -1467,7 +1463,7 @@ local function drawInFlight(w, c, scale, scrW, scrH)
             local textPad = px(8, scale, 4, 12)
             local currentRightX = mainRight - textPad
             local currValue = formatValue(getVal(w.currentSource)) .. "A"
-            local currText = T(w, "Curr") .. " " .. currValue
+            local currText = T(w, "Current") .. " " .. currValue
             local currFont = "large"
             setFontSize(currFont, scale)
             local currentLeft = math.max(voltageX + vW + gap, percentRight + gap)
@@ -1531,6 +1527,7 @@ local function paint(w, ...)
     currentFont = nil
     local scrW, scrH = windowSize(...)
     local scale = scaleFor(scrW, scrH)
+    local x18Widget = scrW <= 500
     local visualScale = scale * 1.1
     local imageScale = scale * 1.5
     local margin = px(15, scale, 4, math.floor(scrW * 0.05))
@@ -1539,10 +1536,14 @@ local function paint(w, ...)
     local rightPad = px(35, scale, 8, math.floor(scrW * 0.08))
     local imageW = px(220, imageScale, 52, math.floor(scrW * 0.45))
     local imageH = px(132, imageScale, 38, math.floor(scrH * 0.45))
+    local imageX, imageY = margin, 0
+    local drawImageW = math.floor(imageW * 0.8 + 0.5)
+    local drawImageH = math.floor(imageH * 0.8 + 0.5)
+    local drawImageX = imageX
+    local drawImageY = imageY + math.floor((imageH - drawImageH) / 2)
     local lqBarW = px(180, visualScale, 66, math.floor(scrW * 0.33))
     local lqBarH = px(39, visualScale, 16, math.floor(scrH * 0.13))
     local lineGap = px(31, scale, 16, 38)
-    local imageX, imageY = margin, 0
     local c = theme(w)
     if not isUsableWidgetSize(scrW, scrH) then
         drawSizePrompt(w, c, scale, scrW, scrH)
@@ -1579,7 +1580,7 @@ local function paint(w, ...)
         if w.selectedBmp then
             w.iconBmp = nil
             w.iconLoaded = false
-            drawBitmapBox(imageX, imageY, imageW, imageH, w.selectedBmp)
+            drawBitmapBox(drawImageX, drawImageY, drawImageW, drawImageH, w.selectedBmp)
             drawn = true
         end
     end
@@ -1593,7 +1594,7 @@ local function paint(w, ...)
         end
     end
     if not drawn and w.iconBmp then
-        drawBitmapBox(imageX, imageY, imageW, imageH, w.iconBmp)
+        drawBitmapBox(drawImageX, drawImageY, drawImageW, drawImageH, w.iconBmp)
     end
     local batt = getVal(w.batterySource)
     local fuelMode = (w.powerSourceType or 1) == 2
@@ -1617,20 +1618,20 @@ local function paint(w, ...)
             battCol = c.warn
         end
     end
-    if fuelMode then
+    local mainGaugeScale = x18Widget and 2.18 or 2.1
+    if fuelMode or tonumber(w.batteryStyle) == 2 then
         local gaugeW = math.floor(scrW * 0.72)
         local gaugeLeft = math.floor((scrW - gaugeW) / 2)
         local gaugeTop = imageY + imageH + px(6, scale, 3, 10)
         local gaugeBottom = scrH - px(70, scale, 34, 84) - px(4, scale, 2, 8)
-        drawFuelGauge(w, c, scale, gaugeLeft, gaugeW, gaugeTop, gaugeBottom, batt, 2.1, math.floor(scrW / 2), gaugeBottom)
-    elseif tonumber(w.batteryStyle) == 2 then
-        local gaugeW = math.floor(scrW * 0.72)
-        local gaugeLeft = math.floor((scrW - gaugeW) / 2)
-        local gaugeTop = imageY + imageH + px(6, scale, 3, 10)
-        local gaugeBottom = scrH - px(70, scale, 34, 84) - px(4, scale, 2, 8)
-        local percent = batteryFuelPercent(w, batt) or 0
-        drawFuelGauge(w, c, scale, gaugeLeft, gaugeW, gaugeTop, gaugeBottom,
-            percent, 2.1, math.floor(scrW / 2), gaugeBottom, true, batt, battCol)
+        if fuelMode then
+            drawFuelGauge(w, c, scale, gaugeLeft, gaugeW, gaugeTop, gaugeBottom,
+                batt, mainGaugeScale, math.floor(scrW / 2), gaugeBottom)
+        else
+            local percent = batteryFuelPercent(w, batt) or 0
+            drawFuelGauge(w, c, scale, gaugeLeft, gaugeW, gaugeTop, gaugeBottom,
+                percent, mainGaugeScale, math.floor(scrW / 2), gaugeBottom, true, batt, battCol)
+        end
     else
         local leftSafe = imageX + imageW + gap
         local rightSafe = scrW - rightPad - lqBarW - gap
@@ -1767,15 +1768,15 @@ local function paint(w, ...)
     setFontSize("small", scale)
     local fieldRight = scrW - rp
     drawCurrentRight(w, fieldRight, by2 - 2, scale)
-    drawSourceRight(w.field1Source, T(w, "Telemetry 1"), fieldRight, by2 + lineGap - 2)
-    drawSourceRight(w.field2Source, T(w, "Telemetry 2"), fieldRight, by2 + lineGap * 2 - 2)
-    drawSourceRight(w.field3Source, T(w, "Telemetry 3"), fieldRight, by2 + lineGap * 3 - 2)
-    drawSourceRight(w.telemetry4Source, T(w, "Telemetry 4"), fieldRight, by2 + lineGap * 4 - 2)
+    drawSourceRight(w.field1Source, "Tlm 1", fieldRight, by2 + lineGap - 2)
+    drawSourceRight(w.field2Source, "Tlm 2", fieldRight, by2 + lineGap * 2 - 2)
+    drawSourceRight(w.field3Source, "Tlm 3", fieldRight, by2 + lineGap * 3 - 2)
+    drawSourceRight(w.telemetry4Source, "Tlm 4", fieldRight, by2 + lineGap * 4 - 2)
     if w.armSeenAt and not w.flightActive then
         local barH = px(32, scale, 17, 38)
         local barY = imageY + imageH + px(3, scale, 1, 6)
-        local barW = math.floor(imageW * 0.72)
-        local barX = imageX + math.floor((imageW - barW) / 2)
+        local barW = math.floor(drawImageW * 0.72)
+        local barX = drawImageX + math.floor((drawImageW - barW) / 2)
         roundPanel(barX, barY, barW, barH, px(7, scale, 3, 9), c.warn, c.outline)
         setFontSize("small", scale)
         local txt = T(w, "ARMED")

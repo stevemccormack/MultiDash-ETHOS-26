@@ -91,7 +91,7 @@ local function write(w, validLanguage)
     file:write("batteryStyle=", tostring(w.batteryStyle or 1), "\n")
     file:write("powerSourceType=", tostring(w.powerSourceType or 1), "\n")
     file:write("fuelShowPercent=", tostring(w.fuelShowPercent or 1), "\n")
-    file:write("statusMode=", tostring(w.statusMode or 1), "\n")
+    file:write("statusMode=", tostring(w.statusMode == 2 and 2 or 1), "\n")
     file:write("flightCount=", tostring(w.flightCount or 0), "\n")
     file:write("language=", validLanguage(w.language), "\n")
     for i = 1, #thresholdKeys do
@@ -122,6 +122,7 @@ local function normalize(w)
   w.telemetry4High = clamp(w.telemetry4High or w.field4High or 80, 0, 10000)
   w.telemetry4Mid = clamp(w.telemetry4Mid or w.field4Mid or 30, 0, 10000)
   w.telemetry4Mode = w.telemetry4Mode == 2 and 2 or 1
+  w.statusMode = w.statusMode == 2 and 2 or 1
 end
 
 local function read(w, validLanguage)
@@ -158,7 +159,7 @@ local function read(w, validLanguage)
             elseif name == "batteryStyle" then w.batteryStyle = n == 2 and 2 or 1
             elseif name == "powerSourceType" then w.powerSourceType = n == 2 and 2 or 1
             elseif name == "fuelShowPercent" then w.fuelShowPercent = n == 2 and 2 or 1
-            elseif name == "statusMode" then w.statusMode = clamp(math.floor(n), 1, 3)
+            elseif name == "statusMode" then w.statusMode = n == 2 and 2 or 1
             elseif name == "flightCount" then w.flightCount = clamp(math.floor(n), 0, 9999)
             elseif w[name] ~= nil then w[name] = n end
           end
