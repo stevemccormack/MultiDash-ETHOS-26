@@ -15,6 +15,7 @@ return {
   ["Low is good"]="Niedrig ist gut",
   ["On"]="Ein",
   ["Language"]="Sprache",
+  ["Timer"]="Timer",
   ["No flight stats captured"]="Keine Flugstatistik erfasst",
   ["Sensor"]="Sensor",
   ["Min"]="Min",

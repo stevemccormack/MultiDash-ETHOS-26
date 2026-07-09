@@ -15,6 +15,7 @@ return {
   ["Low is good"]="DI WEI HAO",
   ["On"]="开启",
   ["Language"]="语言",
+  ["Timer"]="Timer",
   ["No flight stats captured"]="未记录飞行统计",
   ["Sensor"]="传感器",
   ["Min"]="最小",

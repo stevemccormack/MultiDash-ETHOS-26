@@ -85,6 +85,8 @@ local function configure(w, api)
       local get = function() return w[key] end
       local set = changed(function(value)
         w[key] = value
+        w._sourceClears = w._sourceClears or {}
+        w._sourceClears[key] = value == nil or nil
         if resetCells then w.detectedCells = nil end
       end)
       if pcall(form.addSourceField, line, nil, get, set) then return end
@@ -93,12 +95,17 @@ local function configure(w, api)
   end
 
   local function addArmSource()
-    local line = form.addLine("Arm")
+    local line = form.addLine("Arm switch")
+    local get = function() return w.armSwitch end
+    local set = changed(function(value)
+      w.armSwitch, w.armSwitchKey = value, nil
+      w._armCleared = value == nil or nil
+    end)
+    if form.addSwitchField then
+      if pcall(form.addSwitchField, line, nil, get, set) then return end
+      if pcall(form.addSwitchField, line, get, set) then return end
+    end
     if form.addSourceField then
-      local get = function() return w.armSwitch end
-      local set = changed(function(value)
-        w.armSwitch, w.armSwitchKey = value, nil
-      end)
       if pcall(form.addSourceField, line, nil, get, set) then return end
       pcall(form.addSourceField, line, get, set)
     end
@@ -138,17 +145,15 @@ local function configure(w, api)
   addToggle(T("Light"),
     function() return w.themeMode == 2 end,
     function(value) w.themeMode = value and 2 or 1 end)
-  addToggle("Dial gauge",
+  addToggle("Round gauge",
     function() return w.batteryStyle == 2 end,
     function(value) w.batteryStyle = value and 2 or 1 end)
   addSection("MODEL SETTINGS")
   addArmSource()
-  addToggle("Arming reverse",
-    function() return (w.armSwitchReverse or 1) == 2 end,
-    function(value) w.armSwitchReverse = value and 2 or 1 end)
   addNumber("Delay", 0, 60,
     function() return w.armDelay or 5 end,
     function(value) w.armDelay = clamp(tonumber(value) or 0, 0, 60) end, 0)
+  addSource(T("Timer"), "timerSource")
   addNumber(T("Flights"), 0, 9999,
     function() return w.flightCount or 0 end,
     function(value) w.flightCount = clamp(math.floor(tonumber(value) or 0), 0, 9999) end, 0)

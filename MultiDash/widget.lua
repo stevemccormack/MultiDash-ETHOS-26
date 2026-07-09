@@ -264,6 +264,17 @@ local function drawHeavyText(x, y, text, weight)
         lcd.drawText(x + i, y, text)
     end
 end
+local function objectField(obj, key)
+    local ok, value = pcall(function() return obj and obj[key] end)
+    return ok and value or nil
+end
+local function methodValue(obj, key)
+    local fn = objectField(obj, key)
+    if type(fn) ~= "function" then return nil end
+    local ok, value = pcall(fn, obj)
+    if not ok then ok, value = pcall(fn) end
+    return ok and value or nil
+end
 local function getVal(src)
     if not src then
         return 0
@@ -279,12 +290,11 @@ local function getVal(src)
         end
     end
     if t == "table" or t == "userdata" then
-        if type(src.value) == "function" then
-            local ok, value = pcall(src.value, src)
-            return ok and (tonumber(value) or 0) or 0
-        end
-        if type(src.value) == "number" or type(src.value) == "string" then
-            return tonumber(src.value) or 0
+        local value = methodValue(src, "value")
+        if value ~= nil then return tonumber(value) or 0 end
+        value = objectField(src, "value")
+        if type(value) == "number" or type(value) == "string" then
+            return tonumber(value) or 0
         end
     end
     local s
@@ -292,19 +302,13 @@ local function getVal(src)
         local ok, resolved = pcall(system.getSource, src)
         if ok then s = resolved end
     end
-    if s and type(s.value) == "function" then
-        local ok, value = pcall(s.value, s)
-        return ok and (tonumber(value) or 0) or 0
-    end
+    local value = methodValue(s, "value")
+    if value ~= nil then return tonumber(value) or 0 end
     return 0
 end
 local function sourceName(src, fallback)
-    if src and type(src.name) == "function" then
-        local ok, nm = pcall(src.name, src)
-        if ok and nm and nm ~= "" then
-            return nm
-        end
-    end
+    local nm = methodValue(src, "name")
+    if nm and nm ~= "" then return nm end
     return fallback
 end
 local function switchBase(k)
@@ -312,18 +316,37 @@ local function switchBase(k)
         return nil
     end
     k = tostring(k)
-    return k:match("S[A-H]") or k:match("s[a-h]") or nil
+    return k:match("S[A-Z]") or k:match("s[a-z]") or nil
+end
+local function sourceQuery(k)
+    if not k then return nil end
+    local category, member, options = tostring(k):match("^([^:]+):([^:]+):([^:]+)$")
+    if not category or not member then return nil end
+    return {
+        category = tonumber(category) or category,
+        member = tonumber(member) or member,
+        options = tonumber(options) or options,
+    }
 end
 local function resolveSwitch(val)
     if not val or val == "" then
         return nil
     end
-    local tries = {
-    }
+    if system and type(system.getSource) == "function" then
+        local query = sourceQuery(val)
+        if query then
+            local ok, sw = pcall(function() return system.getSource(query) end)
+            if ok and sw then return sw end
+        end
+    end
+    local tries = {}
     tries[#tries + 1] = val
-    tries[#tries + 1] = tostring(val):upper()
-    tries[#tries + 1] = tostring(val):lower()
-    local base = switchBase(val)
+    local text = tostring(val)
+    tries[#tries + 1] = text:upper()
+    tries[#tries + 1] = text:lower()
+    local number = tonumber(text)
+    if number then tries[#tries + 1] = number end
+    local base = switchBase(text)
     if base then
         tries[#tries + 1] = base:upper()
         tries[#tries + 1] = base:lower()
@@ -358,6 +381,11 @@ local function formatTime(seconds)
     local s = seconds % 60
     return string.format("%02d:%02d", m, s)
 end
+
+local function timerSeconds(w)
+    return (w and w.timerSource and getVal(w.timerSource)) or (w and w.flightTime) or 0
+end
+
 local function formatValue(v)
     if v == nil then
         return "--"
@@ -547,18 +575,14 @@ local function fitStatusText(label, state, maxW, scale)
     end
     return fitText(label, maxW - suffixW) .. suffix
 end
-local function armValueActive(value, reversed)
+local function armValueActive(value)
     if type(value) == "boolean" then
-        return reversed and not value or value
+        return value
     end
     value = tonumber(value) or 0
-    if reversed then
-        return value < 0
-    end
     return value > 0
 end
-local function switchActive(sw, key, direction)
-    local reversed = tonumber(direction) == 2
+local function switchActive(sw, key)
     if not sw and key then
         sw = resolveSwitch(key)
     end
@@ -567,42 +591,32 @@ local function switchActive(sw, key, direction)
     end
     local t = type(sw)
     if t == "number" then
-        return armValueActive(sw, reversed)
+        return armValueActive(sw)
     end
     if t == "string" then
         local value = tonumber(sw)
         if value then
-            return armValueActive(value, reversed)
+            return armValueActive(value)
         end
         local resolved = resolveSwitch(sw)
-        return resolved and resolved ~= sw and switchActive(resolved, nil, direction) or false
+        return resolved and resolved ~= sw and switchActive(resolved) or false
     end
     if t == "table" or t == "userdata" then
-        if type(sw.active) == "function" then
-            local ok, v = pcall(function()
-                return sw:active()
-            end)
-            if ok then
-                return armValueActive(v, reversed)
-            end
-        end
-        if type(sw.value) == "function" then
-            local ok, v = pcall(function()
-                return sw:value()
-            end)
-            if ok then
-                return armValueActive(v, reversed)
-            end
-        end
-        if type(sw.value) == "number" or type(sw.value) == "string" then
-            return armValueActive(sw.value, reversed)
+        local v = methodValue(sw, "state")
+        if v ~= nil then return armValueActive(v) end
+        v = methodValue(sw, "active")
+        if v ~= nil then return armValueActive(v) end
+        v = methodValue(sw, "value")
+        if v ~= nil then return armValueActive(v) end
+        v = objectField(sw, "value")
+        if type(v) == "number" or type(v) == "string" then
+            return armValueActive(v)
         end
     end
-    return armValueActive(getVal(sw), reversed)
+    return armValueActive(getVal(sw))
 end
 local function create()
     return {
-        armSwitchReverse = 1,
         armDelay = 5,
         inFlightScreen = 1,
         iconLoaded = false,
@@ -645,6 +659,7 @@ local function create()
         flightStart = 0,
         flightTime = 0,
         flightCount = 0,
+        timerSource = nil,
         dirty = false,
         dirtyAt = 0,
         nextRefresh = 0,
@@ -660,10 +675,18 @@ local function storageCall(method, widget)
     end
     local fn = storageModule[method]
     if type(fn) ~= "function" then return false end
-    return fn(widget, i18n.valid)
+    local ok, result = pcall(fn, widget, i18n.valid)
+    return ok and result or false
 end
 local function read(widget) return storageCall("read", widget) end
 local function write(widget) return storageCall("write", widget) end
+local function flush(w)
+    if w and w.dirty and write(w) then
+        w.dirty = false
+        return true
+    end
+    return false
+end
 local function configure(widget)
     local chunk = loadfile("config.lua")
     if not chunk then return end
@@ -736,6 +759,7 @@ local function drawPostFlight(w, c, scale, scrW, scrH)
             getTextW = getTextW,
             setFontSize = setFontSize,
             formatTime = formatTime,
+            timerSeconds = timerSeconds,
             formatValue = formatValue,
             fitText = fitText,
             statStatus = statStatus,
@@ -921,7 +945,7 @@ local function updateStats(w)
 end
 local function updateFlight(w, now)
     now = now or os.clock()
-    local armed = switchActive(w.armSwitch, w.armSwitchKey, w.armSwitchReverse)
+    local armed = switchActive(w.armSwitch, w.armSwitchKey)
     if armed then
         if not w.armSeenAt then
             w.armSeenAt = now
@@ -950,6 +974,7 @@ local function updateFlight(w, now)
                 w.flightCount = (tonumber(w.flightCount) or 0) + 1
                 w.dirty = true
                 w.dirtyAt = now
+                flush(w)
             end
         end
     end
@@ -996,7 +1021,7 @@ local function sourceHasValue(src, allowZero)
     local t = type(src)
     if t == "table" or t == "userdata" then
         for i = 1, #sourceValidityMethods do
-            local fn = src[sourceValidityMethods[i]]
+            local fn = objectField(src, sourceValidityMethods[i])
             if type(fn) == "function" then
                 local ok, valid = pcall(fn, src)
                 if ok and type(valid) == "boolean" then
@@ -1511,7 +1536,7 @@ local function drawInFlight(w, c, scale, scrW, scrH)
     local timerScale = scale * 1.5
     setFontSize("huge", timerScale)
     lcd.color(c.text)
-    local timeText = formatTime(w.flightTime or 0)
+    local timeText = formatTime(timerSeconds(w))
     local tx
     if gaugeMode then
         tx = math.max(margin, rightX - px(10, scale, 5, 16) - (getTextW(timeText) or 0))
@@ -1676,7 +1701,7 @@ local function paint(w, ...)
     lcd.color(c.text)
     local timerScale = scale * 1.5
     setFontSize("huge", timerScale)
-    local timerText = formatTime(w.flightTime or 0)
+    local timerText = formatTime(timerSeconds(w))
     local timerY = scrH - px(70, scale, 34, 84)
     local statusH, statusW, statusY
     if w.statusSource then
@@ -1803,16 +1828,14 @@ local function wakeup(w)
         end
     end
     if w.dirty and now - (w.dirtyAt or 0) > 0.5 then
-        local saved = write(w)
-        if saved then
-            w.dirty = false
-        else
+        if not flush(w) then
             w.dirtyAt = now + 4.5
         end
     end
 end
 local function close(w)
     if not w then return end
+    flush(w)
     w.selectedBmp = nil
     w.iconBmp = nil
     w.stats = nil

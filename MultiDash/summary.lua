@@ -33,7 +33,7 @@ local function draw(w, c, scale, scrW, scrH, api)
   local titleY = headerY + px(7, scale, 3, 10)
   boldText(title, margin + pad, titleY, c.text)
   api.setFontSize("huge", scale)
-  boldRight(api.formatTime(w.flightTime or 0), scrW - margin - pad, headerY + px(3, scale, 1, 8), c.text)
+  boldRight(api.formatTime(api.timerSeconds(w)), scrW - margin - pad, headerY + px(3, scale, 1, 8), c.text)
 
   if not w.statOrder or #w.statOrder == 0 then
     api.setFontSize("large", scale)

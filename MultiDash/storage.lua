@@ -7,6 +7,7 @@ local sourceKeys = {
   field4 = "field4Source",
   telemetry4 = "telemetry4Source",
   status = "statusSource",
+  timer = "timerSource",
   inFlight1 = "inFlight1Source",
   inFlight2 = "inFlight2Source",
   inFlight3 = "inFlight3Source",
@@ -15,12 +16,12 @@ local sourceKeys = {
   rpm = "rpmSource",
 }
 local sourceOrder = {
-  "battery", "link", "field1", "field2", "field3", "field4", "telemetry4", "status",
+  "battery", "link", "field1", "field2", "field3", "field4", "telemetry4", "status", "timer",
   "inFlight1", "inFlight2", "inFlight3", "inFlight4", "current", "rpm",
 }
 local thresholdKeys = {"batt", "fuel", "link", "current", "field1", "field2", "field3", "field4", "telemetry4"}
 local thresholdSuffixes = {"High", "Mid", "Low", "Mode"}
-local objectProps = {"name", "id", "label", "toString", "stringValue"}
+local objectProps = {"label", "toString", "name", "stringValue", "id"}
 
 local function clamp(v, lo, hi)
   if v < lo then return lo end
@@ -37,20 +38,79 @@ local function modelKey()
   return (name or "default"):gsub("%W", "_")
 end
 
-local function objectKey(obj)
+local function modelPath(key)
+  return "SCRIPTS:/MultiDash/models/" .. key .. ".cfg"
+end
+
+local function cleanKey(value)
+  if value == nil then return nil end
+  local text = tostring(value):gsub("^%s+", ""):gsub("%s+$", "")
+  if text == "" or text == "---" then return "" end
+  return text
+end
+
+local function prop(obj, name)
+  local ok, value = pcall(function() return obj[name] end)
+  if not ok then return nil end
+  if type(value) == "function" then
+    local fn = value
+    ok, value = pcall(fn, obj)
+    if not ok then ok, value = pcall(fn) end
+  end
+  return ok and value or nil
+end
+
+local function sourceSpec(obj)
   local kind = type(obj)
-  if kind == "string" or kind == "number" then return tostring(obj) end
-  if not obj then return "" end
+  if kind ~= "table" and kind ~= "userdata" then return nil end
+  local category, member = prop(obj, "category"), prop(obj, "member")
+  if category == nil or member == nil then return nil end
+  return tostring(category) .. ":" .. tostring(member) .. ":" .. tostring(prop(obj, "options") or 0)
+end
+
+local function switchKey(text)
+  text = cleanKey(text)
+  local key = text and text:match("^([Ss][A-Za-z])%f[%W]")
+  return key and key:upper() or nil
+end
+
+local function objectKey(obj, switchOnly)
+  local kind = type(obj)
+  if kind == "string" or kind == "number" then
+    local key = cleanKey(obj) or ""
+    return (switchOnly and switchKey(key)) or key
+  end
+  if not obj then return nil, false end
+  local best, id, spec = nil, nil, sourceSpec(obj)
+  if spec then return spec, false end
   for i = 1, #objectProps do
-    local value = obj[objectProps[i]]
-    if type(value) == "function" then
-      local ok, result = pcall(value, obj)
-      if ok and result ~= nil and tostring(result) ~= "" then return tostring(result) end
+    local value = prop(obj, objectProps[i])
+    local text = cleanKey(value)
+    if text == "" then return "", false end
+    if text and not tonumber(text) and (not best or #text > #best) then
+      best = text
     elseif type(value) == "string" or type(value) == "number" then
-      return tostring(value)
+      id = id or tostring(value)
     end
   end
-  return tostring(obj):match("S[A-H]") or ""
+  local text = tostring(obj)
+  local fallback = text:match("S[A-Z]") or text:match("s[a-z]")
+  local wait = not best and not id and not fallback
+  best = best or fallback or id or ""
+  return (switchOnly and switchKey(best)) or best, wait
+end
+
+local function readMap(path)
+  local map, file = {}, io.open(path, "r")
+  if not file then return map end
+  while true do
+    local ok, line = pcall(file.read, file, "*l")
+    if not ok or not line then break end
+    local name, value = line:match("^(%w+)=(.*)$")
+    if name then map[name] = value end
+  end
+  pcall(file.close, file)
+  return map
 end
 
 local function callResolver(fn, value)
@@ -62,44 +122,88 @@ local function resolve(method, value)
   if not value or value == "" or not system or type(system[method]) ~= "function" then return nil end
   local fn = system[method]
   local text = tostring(value)
-  local base = text:match("S[A-H]") or text:match("s[a-h]")
+  if method == "getSource" then
+    local category, member, options = text:match("^([^:]+):([^:]+):([^:]+)$")
+    if category and member then
+      local source = callResolver(fn, {
+        category = tonumber(category) or category,
+        member = tonumber(member) or member,
+        options = tonumber(options) or options,
+      })
+      if source then return source end
+    end
+  end
+  local base = text:match("S[A-Z]") or text:match("s[a-z]")
+  local number = tonumber(text)
   return callResolver(fn, value) or callResolver(fn, text:upper()) or callResolver(fn, text:lower())
+    or (number and callResolver(fn, number))
     or (base and (callResolver(fn, base:upper()) or callResolver(fn, base:lower())))
 end
 
 local function assignSource(w, key, value)
-  w[key] = value and resolve("getSource", value) or nil
+  w[key] = value and (resolve("getSource", value) or value) or nil
 end
 
 local function write(w, validLanguage)
   if not w then return true end
-  local file = io.open("SCRIPTS:/MultiDash/models/" .. modelKey() .. ".cfg", "w")
+  local key = modelKey()
+  local path = modelPath(key)
+  local old = readMap(path)
+  local savedSources, pending = {}, false
+  for i = 1, #sourceOrder do
+    local saved = sourceOrder[i]
+    local keyName = sourceKeys[saved]
+    local value, wait
+    if w._sourceClears and w._sourceClears[keyName] then
+      value, wait = "", false
+    else
+      value, wait = objectKey(w[keyName], false)
+    end
+    savedSources[saved] = value
+    pending = pending or wait
+  end
+  local armValue, armWait
+  local armSpec = sourceSpec(w.armSwitch)
+  if w._armCleared then
+    armValue, armWait = "", false
+  elseif armSpec then
+    armValue, armWait = armSpec, false
+  elseif w.armSwitchKey then
+    armValue, armWait = w.armSwitchKey, false
+  else
+    armValue, armWait = objectKey(w.armSwitch, true)
+  end
+  pending = pending or armWait
+  if pending then return false end
+  local file = io.open(path, "w")
   if not file then return false end
+  local function put(...)
+    if not file:write(...) then error("write failed") end
+  end
   local ok = pcall(function()
     for i = 1, #sourceOrder do
       local saved = sourceOrder[i]
-      file:write(saved, "=", objectKey(w[sourceKeys[saved]]), "\n")
+      put(saved, "=", savedSources[saved] or old[saved] or "", "\n")
     end
-    file:write("arm=", w.armSwitchKey or objectKey(w.armSwitch), "\n")
-    file:write("armReverse=", tostring(w.armSwitchReverse or 1), "\n")
-    file:write("armDelay=", tostring(w.armDelay or 5), "\n")
-    file:write("inFlightScreen=", tostring(w.inFlightScreen or 1), "\n")
-    file:write("image=", w.imageFile or "", "\n")
-    file:write("cells=", tostring(w.cellCount or 0), "\n")
-    file:write("batteryType=", tostring(w.batteryType or 1), "\n")
-    file:write("theme=", tostring(w.themeMode or 1), "\n")
-    file:write("batteryStyle=", tostring(w.batteryStyle or 1), "\n")
-    file:write("powerSourceType=", tostring(w.powerSourceType or 1), "\n")
-    file:write("fuelShowPercent=", tostring(w.fuelShowPercent or 1), "\n")
-    file:write("statusMode=", tostring(w.statusMode == 2 and 2 or 1), "\n")
-    file:write("flightCount=", tostring(w.flightCount or 0), "\n")
-    file:write("language=", validLanguage(w.language), "\n")
+    put("arm=", armValue or old.arm or "", "\n")
+    put("armDelay=", tostring(w.armDelay or 5), "\n")
+    put("inFlightScreen=", tostring(w.inFlightScreen or 1), "\n")
+    put("image=", w.imageFile or "", "\n")
+    put("cells=", tostring(w.cellCount or 0), "\n")
+    put("batteryType=", tostring(w.batteryType or 1), "\n")
+    put("theme=", tostring(w.themeMode or 1), "\n")
+    put("batteryStyle=", tostring(w.batteryStyle or 1), "\n")
+    put("powerSourceType=", tostring(w.powerSourceType or 1), "\n")
+    put("fuelShowPercent=", tostring(w.fuelShowPercent or 1), "\n")
+    put("statusMode=", tostring(w.statusMode == 2 and 2 or 1), "\n")
+    put("flightCount=", tostring(w.flightCount or 0), "\n")
+    put("language=", validLanguage(w.language), "\n")
     for i = 1, #thresholdKeys do
       local key = thresholdKeys[i]
       for j = 1, #thresholdSuffixes do
         local suffix = thresholdSuffixes[j]
         local value = w[key .. suffix]
-        if value ~= nil then file:write(key, suffix, "=", tostring(value), "\n") end
+        if value ~= nil then put(key, suffix, "=", tostring(value), "\n") end
       end
     end
   end)
@@ -128,8 +232,7 @@ end
 local function read(w, validLanguage)
   if not w then return true end
   local key = modelKey()
-  local file = io.open("SCRIPTS:/MultiDash/models/" .. key .. ".cfg", "r")
-  if not file then file = io.open("SCRIPTS:/MultiDash_" .. key .. ".cfg", "r") end
+  local file = io.open(modelPath(key), "r")
   if file then
     while true do
       local ok, line = pcall(file.read, file, "*l")
@@ -150,8 +253,7 @@ local function read(w, validLanguage)
         else
           local n = tonumber(value)
           if n then
-            if name == "armReverse" then w.armSwitchReverse = n == 2 and 2 or 1
-            elseif name == "armDelay" then w.armDelay = clamp(n, 0, 60)
+            if name == "armDelay" then w.armDelay = clamp(n, 0, 60)
             elseif name == "inFlightScreen" then w.inFlightScreen = n == 2 and 2 or 1
             elseif name == "cells" then w.cellCount = clamp(math.floor(n), 0, 12)
             elseif name == "batteryType" then w.batteryType = clamp(math.floor(n), 1, 5)
