@@ -100,7 +100,7 @@ Assign any field to the link source or Telemetry 1-4. MultiDash uses the sensor 
 
 Battery mode calculates percentage from pack voltage, battery type, and cell count. Cell count can be selected or detected automatically.
 
-Fuel mode expects a 0-100% fuel source. Raw battery voltage is not compatible with the fuel scale; an 11V source will be read as roughly 11%.
+Dial Gauge mode expects a 0-100% fuel source. Raw battery voltage is not compatible with the fuel scale; an 11V source will be read as roughly 11%.
 
 Default battery thresholds are per cell:
 
