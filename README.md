@@ -104,7 +104,6 @@ MultiDash/ is the only runtime source tree. Run `powershell -NoProfile -Executio
 
 MultiDash was created and developed by Steven McCormack. It was made for FrSky ETHOS 26 and takes inspiration from Rob Thomson's Rotorflight and DashX Lua suites.
 
-This project is released under the GNU General Public License. See [LICENSE](LICENSE).
 
 ## License
 
