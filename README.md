@@ -81,9 +81,9 @@ The manual ZIP already contains the required MultiDash/ folder. Copy it so the f
 
 ## Upgrading
 
-MultiDash reads V1.3.3 and V2.0 RC1 per-model configuration files. Existing sources, thresholds, images, themes, language, flight count, arming, and in-flight fields are retained. On first load, the old power toggles are converted to the closest operating profile.
+MultiDash reads V1.3.3 and V2.0 per-model configuration files. Existing sources, thresholds, images, themes, language, flight count, arming, and in-flight fields are retained. On first load, the old power toggles are converted to the closest operating profile.
 
-Review these new RC2 settings before flight:
+Review these new V2.0 settings before flight:
 
 - Operating profile
 - Cells per battery
