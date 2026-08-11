@@ -1,151 +1,111 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/MultiDash/MultiDash.png" alt="MultiDash logo" width="280">
+  <img src="MultiDash/MultiDash.png" alt="MultiDash logo" width="280">
 </p>
 
-MultiDash is a configurable telemetry dashboard for FrSky's ETHOS 26. It started as a UMX dashboard, but its telemetry fields can be used with TW, ACCESS, ACCST, DSM, and other setups as long as ETHOS can see the sensor.
+# MultiDash 2.0
 
-This release includes pre-flight, in-flight, and flight-summary screens with automatic timing and persistent flight counts.
+**V2.0 is COMING SOON!** 
 
-## System Requirements
-
-ETHOS 1.6 or Newer
-
-## Tested Hardware
-
-FrSky X18  
-FrSky X18SE  
-FrSky X18RS 
-
-Partially simulator-tested on:
-
-FrSky Twin Lite  
-FrSky X20
-
-MultiDash is designed for the large ETHOS widget size that keeps the normal system bars visible.
-
-## Screenshots
-
-### No Telemetry
+MultiDash is a configurable telemetry dashboard for FrSky ETHOS radios. One widget supports electric aircraft, dual-battery electric aircraft, rotorwing models, fuel-powered aircraft, and general telemetry.
 
 <p align="center">
-  <img src="docs/screenshots/no-telem.png" alt="MultiDash no telemetry screen" width="520">
+  <img src="assets/screenshots/main-dashboard.png" alt="MultiDash V2 main dashboard with 2.4 GHz and 900 MHz telemetry" width="49%">
+  <img src="assets/screenshots/inflight-dashboard.png" alt="MultiDash V2 main dashboard with 4-in-1 telemetry" width="49%">
 </p>
-
-### TW Protocol
-
-<table>
-  <tr>
-    <th>Pre-Flight</th>
-    <th>In-Flight</th>
-    <th>Flight Summary</th>
-  </tr>
-  <tr>
-    <td><img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/docs/screenshots/pre-flight-tw.png" alt="MultiDash TW pre-flight dashboard" width="260"></td>
-    <td><img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/docs/screenshots/in-flight-tw.png" alt="MultiDash TW in-flight dashboard" width="260"></td>
-    <td><img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/docs/screenshots/post-flight-tw.png" alt="MultiDash TW flight summary" width="260"></td>
-  </tr>
-</table>
-
-### UMX / DSM Telemetry
-
-<table>
-  <tr>
-    <th>Main Dashboard</th>
-    <th>In-Flight</th>
-    <th>Flight Summary</th>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/main-dashboard.png" alt="MultiDash UMX main dashboard" width="260"></td>
-    <td><img src="docs/screenshots/in-flight-dashboard.png" alt="MultiDash UMX in-flight dashboard" width="260"></td>
-    <td><img src="docs/screenshots/post-flight-summary.png" alt="MultiDash UMX flight summary" width="260"></td>
-  </tr>
-</table>
-
-### Experimental Fuel Gauge
-
 <p align="center">
-  <img src="https://raw.githubusercontent.com/stevemccormack/MultiDash-ETHOS-26/main/docs/screenshots/experimental-fuel-gauge-on.png" alt="MultiDash experimental fuel gauge" width="420">
+  <img src="assets/screenshots/inflight-warning-state.png" alt="MultiDash V2 flashing no-telemetry warning" width="49%">
+  <img src="assets/screenshots/post-flight-summary.png" alt="MultiDash V2 post-flight summary" width="49%">
 </p>
 
-## Major Features
+V2.0 combines the redesigned dashboard, dual-battery and rotorwing layouts, consistent text scaling, manual telemetry setup, audio cues, per-model storage, and a larger post-flight summary in one release.
 
-- ETHOS 1.6+ support, including ETHOS 26
-- Pre-flight, in-flight, and color-coded flight-summary screens
-- Automatic no-telemetry warning
-- Battery tower or round gauge display
-- Battery percentage calculated from voltage when no percentage sensor is selected
-- 1S through 12S support for LiPo, LiHV, Li-ion, LiFe, and NiCd
-- Fuel mode for 0-100% fuel or tank sensors
-- Link quality bar, current, RPM, and four configurable telemetry fields
-- Link quality bar shows session minimum text and a marker after a 5-second startup grace period
-- Optional main-screen status bar for switch-style sources such as FrSky Remote NFC values
-- Four configurable in-flight telemetry fields
-- Source-based arming with normal or reversed direction and adjustable delay
-- Post-flight summary appears immediately on disarm
-- Automatic flight timer and persistent flight counter
-- Minimum and maximum statistics with adjustable warning thresholds
-- Dark and light themes, per-model settings, and model images
-- Nine selectable languages
-- Split-file layout with lazy-loaded settings, storage, translations, and summary code
+## Requirements
 
-Flights lasting at least 15 seconds are added to the flight counter. The count can also be edited in widget settings.
+- ETHOS 1.6 or newer
+- One Single Large Widget zone
+- Telemetry sensors supported by ETHOS
 
-## Other Telemetry
 
-MultiDash started as a dashboard for UMX aircraft and can be set up around DSM and MultiModule telemetry. Available sensors depend on the aircraft, receiver, and external module.
+## Features
 
-Assign any field to the link source or Telemetry 1-4. MultiDash uses the sensor name and records its minimum and maximum values. Threshold direction is adjustable because RSSI and VFR are high-is-good, while frame losses, fades, and holds are low-is-good.
+- Pre-flight, in-flight, and post-flight views
+- Electric, Electric Dual Battery, Rotorwing, Fuel, and General operating profiles
+- Horizontal dual-battery display with separate FLVSS readings and combined series voltage
+- Per-pack voltage, per-cell voltage, percentage, sensor state, and cell-normalized pack mismatch warning
+- Battery tower and battery-only dial gauge styles
+- LiPo, LiHV, Li-ion, LiFe, and NiCd voltage curves and chemistry-specific thresholds
+- Link, current, RPM, status, timer, and four general telemetry fields
+- Explicit RPM warning and maximum thresholds
+- Minimum/maximum flight statistics and persistent flight count
+- Dark/light themes, three text sizes, model images, and per-model settings
+- English, German, Spanish, French, Italian, Polish, Portuguese, Simplified Chinese, and Traditional Chinese
+- Flashing no-telemetry warning, one-time telemetry-acquired beep, and armed/disarmed voice cues
 
-## Battery and Fuel Modes
+## Operating profiles
 
-Battery mode calculates percentage from pack voltage, battery type, and cell count. Cell count can be selected or detected automatically.
+Select one profile under **Model Settings → Operating profile**:
 
-Dial Gauge mode expects a 0-100% fuel source. Raw battery voltage is not compatible with the fuel scale; an 11V source will be read as roughly 11%.
+| Profile | Intended setup |
+|---|---|
+| Electric | One flight battery |
+| Electric Dual Battery | Two monitored batteries, including two 6S packs used as a 12S system |
+| Rotorwing | Battery plus the paired rotor RPM gauge |
+| Fuel | Fuel or tank percentage using the original E / 1/2 / F dial |
+| General | Flexible telemetry without a specialized main gauge |
 
-Default battery thresholds are per cell:
+Profiles replace the older overlapping Fuel, Dual Battery, and Rotorwing toggles. Legacy flags are still saved for backward configuration compatibility.
 
-| Setting | Default |
-|---|---:|
-| Low | 3.45V |
-| Mid | 3.75V |
-| High | 4.15V |
+## Dual-battery setup
 
-## Suggested First Setup
+1. Select **Electric Dual Battery**.
+2. Set Battery 1 Power Source to the first FLVSS.
+3. Set Battery 2 Power Source to the second FLVSS.
+4. Optionally set Total Pack Voltage Source to a separate full-pack sensor. Without one, MultiDash adds Battery 1 and Battery 2.
+5. Select the chemistry and cells per battery. For two 6S packs, set **6**.
+6. Verify both pack voltages, per-cell values, and total series voltage before flight.
+7. Adjust the per-cell pack mismatch warning and alert thresholds if needed.
 
-1. Select Battery or Fuel.
-2. Select the power source and optional percentage sensor.
-3. Set battery type and cell count when using battery mode.
-4. Select link quality, current, RPM, and any additional telemetry.
-5. Select the arming switch, direction, and delay.
-6. Adjust thresholds, then select a model image and language if needed.
+Cell count is always set manually because pack voltage alone cannot distinguish a full lower-cell pack from a depleted higher-cell pack.
+
+## Telemetry protocols
+
+MultiDash reads standard numeric ETHOS sources rather than protocol packets. Source selection is always manual and works with ACCESS, ACCST, TD, TW, CRSF/ELRS, mLRS, and multimodule telemetry when ETHOS exposes the sensor. Set link thresholds appropriate to the selected source's unit. A plain RSSI source with no reported unit is kept as a raw whole number; only `%` units and explicit LQ, RQly, VFR, or Quality names are treated as percentages.
 
 ## Installation
 
-For ETHOS Suite / installer use:
-release/MultiDash_ETHOS_installer.zip
+Download one of the two assets from [GitHub Releases](https://github.com/stevemccormack/MultiDash-ETHOS-26/releases):
 
-For manual SD card install use:
-release/MultiDash_manual_install.zip
+- MultiDash_ETHOS_installer.zip for ETHOS Suite
+- MultiDash_manual_install.zip for manual SD-card installation
 
-The final path must be for manual install:
-SCRIPTS:/MultiDash
-Use the Single Large Widget size. Other widget sizes will show the size warning.
+The manual ZIP already contains the required MultiDash/ folder. Copy it so the final path is SCRIPTS:/MultiDash. Do not add another Scripts or MultiDash layer.
 
-Model images are selected from `BITMAPS:/models`. Per-model settings are saved under `SCRIPTS:/MultiDash/models`.
+## Upgrading
 
-## Languages
+MultiDash reads V1.3.3 and V2.0 RC1 per-model configuration files. Existing sources, thresholds, images, themes, language, flight count, arming, and in-flight fields are retained. On first load, the old power toggles are converted to the closest operating profile.
 
-English, German, Spanish, French, Italian, Polish, Portuguese, Chinese Simplified, and Chinese Traditional. Selectable from the bottom of the widget.
+Review these new RC2 settings before flight:
 
-## Notes / Disclaimer
+- Operating profile
+- Cells per battery
+- Chemistry-specific cell thresholds
+- RPM warning
+- Pack mismatch warning/alert
+- Minimum flight seconds
 
-MultiDash has not been tested with every ETHOS radio, receiver, protocol, sensor, or widget size. Verify telemetry values and thresholds before relying on them. When reporting a problem, include the radio, ETHOS version, receiver or protocol, telemetry sources, screenshots, and steps to reproduce it.
+## Safety
 
-## Credits
+Telemetry dashboards are advisory. Confirm sensor assignment, pack wiring, cell count, voltage, chemistry, thresholds, arming behavior, and failsafe operation on the ground. A missing sensor is shown separately in dual-battery mode; the remaining valid pack continues to display.
 
-MultiDash was created and developed by Steven McCormack.
+## Development
 
-This project was made for FrSky's ETHOS 26 and takes inspiration from Rob Thomson's Rotorflight and DashX Lua suites.
+MultiDash/ is the only runtime source tree. Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools/package.ps1` to build the source, ETHOS installer, and manual-install packages. The build verifies the three protected audio hashes before packaging. Runtime, migration, language, lifecycle, and screen-matrix checks live under tests/.
+
+## Credits and license
+
+MultiDash was created and developed by Steven McCormack. It was made for FrSky ETHOS 26 and takes inspiration from Rob Thomson's Rotorflight and DashX Lua suites.
+
+This project is released under the GNU General Public License. See [LICENSE](LICENSE).
 
 ## License
 
