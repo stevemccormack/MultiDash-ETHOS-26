@@ -7,13 +7,12 @@
 **V2.0 is COMING SOON!** 
 
 MultiDash is a configurable telemetry dashboard for FrSky ETHOS radios. One widget supports electric aircraft, dual-battery electric aircraft, rotorwing models, fuel-powered aircraft, and general telemetry.
-
-<p align="center">
-  <img src="assets/screenshots/main-dashboard.png" alt="MultiDash V2 main dashboard with 2.4 GHz and 900 MHz telemetry" width="49%">
-  <img src="assets/screenshots/inflight-dashboard.png" alt="MultiDash V2 main dashboard with 4-in-1 telemetry" width="49%">
 </p>
 <p align="center">
   <img src="assets/screenshots/inflight-warning-state.png" alt="MultiDash V2 flashing no-telemetry warning" width="49%">
+<p align="center">
+  <img src="assets/screenshots/main-dashboard.png" alt="MultiDash V2 main dashboard with 2.4 GHz and 900 MHz telemetry" width="49%">
+  <img src="assets/screenshots/inflight-dashboard.png" alt="MultiDash V2 main dashboard with 4-in-1 telemetry" width="49%">
   <img src="assets/screenshots/post-flight-summary.png" alt="MultiDash V2 post-flight summary" width="49%">
 </p>
 
