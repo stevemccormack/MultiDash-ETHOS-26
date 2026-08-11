@@ -2,22 +2,49 @@ local i18n = assert(loadfile("i18n.lua"))()
 local summaryModule
 local summaryApi
 local LINK_MIN_GRACE = 5
+local AUDIO_PATH = "SCRIPTS:/MultiDash/audio/"
 local currentFont
-local storageModule
-local function T(widget, key) return i18n.text(widget, key) end
-local function getTextW(txt)
-    if lcd and type(lcd.getTextSize) == "function" then
-        local ok, w = pcall(lcd.getTextSize, txt or "")
-        if ok then return w or 0 end
+local pairedFooterFont
+local currentFontSetting = 2
+local currentTextScale = 1
+local metricText, metricFont, metricW, metricH
+local TEXT_SCALE_SMALL, TEXT_SCALE_MEDIUM, TEXT_SCALE_LARGE = 0.82, 1.70, 2.28
+local fontS, fontL, fontXL, fontXXL = _G.FONT_S, _G.FONT_L, _G.FONT_XL, _G.FONT_XXL
+local MAX_MODEL_IMAGE_BYTES = 350 * 1024
+local MAX_MODEL_IMAGE_WIDTH, MAX_MODEL_IMAGE_HEIGHT = 480, 320
+local MIN_MODEL_IMAGE_RAM = MAX_MODEL_IMAGE_WIDTH * MAX_MODEL_IMAGE_HEIGHT * 2 + 128 * 1024
+
+local function preset(small, medium, large)
+    return currentFontSetting == 1 and small or (currentFontSetting == 3 and large or medium)
+end
+local function gaugeFooterHeight() return preset(28, 36, 44) end
+local T = i18n.text
+local function playCue(name)
+    local fn = system and system.playFile
+    if type(fn) == "function" then
+        pcall(fn, AUDIO_PATH .. name .. ".wav")
     end
-    return 0
+end
+local drawText = lcd.drawText
+local function textMetrics(txt)
+    txt = tostring(txt or "")
+    if txt ~= metricText or currentFont ~= metricFont then
+        metricText, metricFont = txt, currentFont
+        metricW, metricH = lcd.getTextSize(txt)
+    end
+    return metricW or 0, metricH or 18
+end
+local function getTextW(txt)
+    return textMetrics(txt)
 end
 local function getTextH(txt)
-    if lcd and type(lcd.getTextSize) == "function" then
-        local ok, _, h = pcall(lcd.getTextSize, txt or "")
-        if ok then return h or 18 end
-    end
-    return 18
+    local _, h = textMetrics(txt)
+    return h
+end
+local function finiteNumber(v)
+    if type(v) == "boolean" then return v and 1 or 0 end
+    v = tonumber(v)
+    return v and v == v and v ~= math.huge and v ~= -math.huge and v or nil
 end
 local function clamp(v, lo, hi)
     v = tonumber(v) or 0
@@ -30,6 +57,14 @@ local function clamp(v, lo, hi)
     return v
 end
 local function scaleFor(w, h)
+    w, h = math.floor(finiteNumber(w) or 0), math.floor(finiteNumber(h) or 0)
+    if w == 472 and (h == 191 or h == 210) then
+        return 0.45
+    end
+    local ratio = h > 0 and w / h or 0
+    if w >= 460 and h >= 185 and ratio >= 1.95 and ratio <= 3.35 then
+        return 0.45
+    end
     return clamp(math.min(w / 800, h / 480), 0.45, 1.35)
 end
 local function windowSize(a, b, c, d)
@@ -55,170 +90,162 @@ local function windowSize(a, b, c, d)
             end
         end
     end
-    return tonumber(w) or 480, tonumber(h) or 320
+    return finiteNumber(w) or 480, finiteNumber(h) or 320
 end
 local function isUsableWidgetSize(w, h)
     w, h = math.floor(w), math.floor(h)
-    if (w == 784 and (h == 294 or h == 316))
+    if (w == 784 and (h == 236 or h == 258 or h == 270 or h == 294 or h == 316))
         or (w == 472 and (h == 191 or h == 210))
         or (w == 630 and (h == 236 or h == 258)) then
         return true
     end
     if w < 460 or h < 185 then return false end
     local ratio = w / h
-    return ratio >= 1.95 and ratio <= 3.35
+    return ratio >= 1.45 and ratio <= 3.35
+end
+local function railWidthFor(w)
+    local ratio = preset(0.28, 0.31, 0.35)
+    if w >= 900 then
+        ratio = ratio + 0.01
+    elseif w >= 600 and w < 760 then
+        ratio = ratio - 0.01
+    end
+    return clamp(math.floor(w * ratio), math.floor(w * 0.27), math.floor(w * 0.36))
 end
 local function px(v, scale, lo, hi)
     local n = math.floor(v * scale + 0.5)
     if hi and lo and hi < lo then
         lo = hi
     end
-    return clamp(n, lo, hi)
+    if lo and n < lo then n = lo end
+    if hi and n > hi then n = hi end
+    return n
 end
-local function fillRoundRect(x, y, w, h, radius, color)
-    lcd.color(color)
-    radius = math.max(0, math.min(radius or 0, math.floor(w / 2), math.floor(h / 2)))
-    if radius < 2 or not lcd.drawFilledCircle then
+local function roundPanel(x, y, w, h, fill, outline)
+    if w <= 0 or h <= 0 then return end
+    if outline and w > 2 and h > 2 then
+        lcd.color(outline)
         lcd.drawFilledRectangle(x, y, w, h)
-        return
-    end
-    lcd.drawFilledRectangle(x + radius, y, w - radius * 2, h)
-    lcd.drawFilledRectangle(x, y + radius, w, h - radius * 2)
-    lcd.drawFilledCircle(x + radius, y + radius, radius)
-    lcd.drawFilledCircle(x + w - radius - 1, y + radius, radius)
-    lcd.drawFilledCircle(x + radius, y + h - radius - 1, radius)
-    lcd.drawFilledCircle(x + w - radius - 1, y + h - radius - 1, radius)
-end
-local function roundPanel(x, y, w, h, radius, fill, outline)
-    if outline then
-        fillRoundRect(x, y, w, h, radius, outline)
-        fillRoundRect(x + 1, y + 1, w - 2, h - 2, math.max(0, radius - 1), fill)
+        lcd.color(fill)
+        lcd.drawFilledRectangle(x + 1, y + 1, w - 2, h - 2)
     else
-        fillRoundRect(x, y, w, h, radius, fill)
+        lcd.color(fill)
+        lcd.drawFilledRectangle(x, y, w, h)
     end
 end
 local palettes = {
     dark = {
-        bg = lcd.RGB(20, 24, 28),
-        text = lcd.RGB(255, 255, 255),
-        muted = lcd.RGB(160, 160, 160),
-        secondary = lcd.RGB(200, 200, 200),
-        neutral = lcd.RGB(220, 220, 220),
-        outline = lcd.RGB(255, 255, 255),
-        barFrame = lcd.RGB(100, 100, 100),
-        batteryEmpty = lcd.RGB(0, 0, 0),
-        good = lcd.RGB(0, 255, 100),
-        warn = lcd.RGB(255, 130, 0),
-        bad = lcd.RGB(255, 50, 50),
-        alertBg = lcd.RGB(255, 255, 255),
-        alertText = lcd.RGB(255, 0, 0),
+        bg = lcd.RGB(13, 18, 23),
+        panel = lcd.RGB(25, 32, 39),
+        panelAlt = lcd.RGB(33, 42, 51),
+        text = lcd.RGB(245, 248, 250),
+        muted = lcd.RGB(148, 163, 178),
+        secondary = lcd.RGB(203, 213, 225),
+        neutral = lcd.RGB(226, 232, 240),
+        outline = lcd.RGB(78, 96, 113),
+        barFrame = lcd.RGB(91, 108, 124),
+        batteryEmpty = lcd.RGB(12, 16, 20),
+        good = lcd.RGB(48, 209, 133),
+        warn = lcd.RGB(255, 174, 66),
+        bad = lcd.RGB(255, 90, 90),
+        alertBg = lcd.RGB(34, 8, 12),
+        alertOutline = lcd.RGB(255, 90, 90),
+        alertText = lcd.RGB(255, 235, 238),
     },
     light = {
-        bg = lcd.RGB(235, 238, 242),
-        text = lcd.RGB(20, 24, 28),
-        muted = lcd.RGB(80, 86, 94),
-        secondary = lcd.RGB(70, 76, 84),
-        neutral = lcd.RGB(45, 50, 58),
-        outline = lcd.RGB(35, 40, 48),
-        barFrame = lcd.RGB(95, 102, 112),
-        batteryEmpty = lcd.RGB(215, 220, 226),
-        good = lcd.RGB(0, 150, 80),
-        warn = lcd.RGB(220, 105, 0),
-        bad = lcd.RGB(210, 30, 30),
-        alertBg = lcd.RGB(0, 0, 0),
-        alertOutline = lcd.RGB(255, 255, 255),
-        alertText = lcd.RGB(185, 0, 0),
+        bg = lcd.RGB(235, 240, 245),
+        panel = lcd.RGB(255, 255, 255),
+        panelAlt = lcd.RGB(226, 233, 240),
+        text = lcd.RGB(21, 30, 40),
+        muted = lcd.RGB(78, 91, 105),
+        secondary = lcd.RGB(61, 74, 88),
+        neutral = lcd.RGB(42, 55, 69),
+        outline = lcd.RGB(151, 165, 180),
+        barFrame = lcd.RGB(120, 135, 150),
+        batteryEmpty = lcd.RGB(222, 228, 235),
+        good = lcd.RGB(0, 145, 91),
+        warn = lcd.RGB(205, 104, 0),
+        bad = lcd.RGB(200, 40, 55),
+        alertBg = lcd.RGB(255, 239, 241),
+        alertOutline = lcd.RGB(200, 40, 55),
+        alertText = lcd.RGB(150, 18, 35),
     },
 }
 local function theme(widget)
-    if widget and tonumber(widget.themeMode) == 2 then
-        return palettes.light
-    end
-    return palettes.dark
+    return widget and tonumber(widget.themeMode) == 2 and palettes.light or palettes.dark
 end
-local function setAvailableFont(...)
-    if not lcd or type(lcd.font) ~= "function" then
-        return
-    end
-    for i = 1, select("#", ...) do
-        local f = _G[select(i, ...)]
-        if f ~= nil then
-            if f == currentFont then
-                return
-            end
-            currentFont = f
-            pcall(lcd.font, f)
-            return
-        end
-    end
+local function setAvailableFont(a, b, c, d)
+    local font = a or b or c or d
+    if font == nil or font == currentFont then return end
+    currentFont = font
+    lcd.font(font)
 end
-local function setFontSize(size, scale)
-    if size == "huge" then
-        if scale < 0.7 then
-            setAvailableFont("FONT_L", "FONT_XL", "FONT_XXL", "FONT_S")
-        elseif scale < 0.95 then
-            setAvailableFont("FONT_XL", "FONT_XXL", "FONT_L", "FONT_S")
-        else
-            setAvailableFont("FONT_XXL", "FONT_XL", "FONT_L", "FONT_S")
-        end
-    elseif size == "large" then
-        if scale < 0.7 then
-            setAvailableFont("FONT_S", "FONT_L", "FONT_XL")
-        elseif scale < 0.95 then
-            setAvailableFont("FONT_L", "FONT_XL", "FONT_S")
-        else
-            setAvailableFont("FONT_XL", "FONT_L", "FONT_S")
-        end
+local function setExactFont(font)
+    if font == nil or font == currentFont then return end
+    currentFont = font
+    lcd.font(font)
+end
+local function setFontSize(size)
+    if currentFontSetting == 1 then
+        if size == "huge" then setAvailableFont(fontL, fontXL, fontXXL, fontS)
+        else setAvailableFont(fontS, fontL, fontXL) end
+    elseif currentFontSetting == 3 then
+        if size == "huge" then setAvailableFont(fontXXL, fontXL, fontL, fontS)
+        else setAvailableFont(fontXL, fontL, fontS) end
     else
-        setAvailableFont("FONT_S", "FONT_L", "FONT_XL")
+        if size == "huge" then setAvailableFont(fontXL, fontXXL, fontL, fontS)
+        else setAvailableFont(fontL, fontS, fontXL) end
     end
 end
-local function drawVoltagePercentStack(centerX, y, batt, percent, color, scale)
-    local vText = string.format("%.2fV", batt)
-    local percentText = percent ~= nil and string.format("%d%%", math.floor(percent + 0.5)) or nil
-    setFontSize("huge", scale)
-    local vW = getTextW(vText) or 0
-    lcd.color(color)
-    lcd.drawText(centerX - math.floor(vW / 2), y, vText)
-    if percentText then
-        setFontSize("huge", scale * 0.95)
-        lcd.drawText(centerX - math.floor((getTextW(percentText) or 0) / 2),
-            y + px(38, scale, 22, 46) + 5, percentText)
-    end
+local function textFits(text, maxW, maxH)
+    local width, height = textMetrics(text)
+    return (not maxW or width <= maxW) and (not maxH or height <= maxH)
 end
+local function setFittingFont(size, text, maxW, maxH)
+    setFontSize(size)
+    if textFits(text, maxW, maxH) then return end
+    if size == "huge" then
+        setFontSize("small")
+        if currentFontSetting == 1 or textFits(text, maxW, maxH) then return end
+    end
+    if currentFontSetting == 3 then
+        setAvailableFont(fontL, fontS, fontXL)
+        if textFits(text, maxW, maxH) then return end
+    end
+    setAvailableFont(fontS, fontL, fontXL, fontXXL)
+end
+local fitText
 local function drawSizePrompt(w, c, scale, scrW, scrH)
     lcd.color(c.bg)
     lcd.drawFilledRectangle(0, 0, scrW, scrH)
     local msg = T(w, "Use Single Large Widget")
-    setFontSize("huge", scale)
-    if getTextW(msg) > scrW - 12 then
-        setFontSize("large", scale)
-    end
+    setFittingFont("huge", msg, math.max(1, scrW - 12), math.max(1, scrH - 4))
+    msg = fitText(msg, math.max(1, scrW - 12))
     local tw = getTextW(msg) or 0
     local x = math.max(0, math.floor((scrW - tw) / 2))
     local y = math.max(0, math.floor(scrH / 2) - px(18, scale, 10, 24))
     lcd.color(c.bad)
-    lcd.drawText(x, y, msg)
+    drawText(x, y, msg)
     for i = 1, px(2, scale, 1, 3) do
-        lcd.drawText(x + i, y, msg)
+        drawText(x + i, y, msg)
     end
 end
-local bitmapScaleSupported = nil
-local bitmapBasicSupported = nil
+local bitmapScaleSupported
+local bitmapBasicSupported
+local defaultIconBmp
+local defaultIconAttempted = false
 local function drawBitmapBox(x, y, w, h, bmp)
     if not bmp then
-        return 
+        return
     end
     if bitmapScaleSupported == true then
         lcd.drawBitmap(x, y, bmp, w, h)
-        return 
+        return
     elseif bitmapScaleSupported == nil then
-        local ok = pcall(function()
-            lcd.drawBitmap(x, y, bmp, w, h)
-        end)
+        local ok = pcall(lcd.drawBitmap, x, y, bmp, w, h)
         bitmapScaleSupported = ok
         if ok then
-            return 
+            return
         end
     end
     local bmpW, bmpH = w, h
@@ -238,9 +265,7 @@ local function drawBitmapBox(x, y, w, h, bmp)
     if bitmapBasicSupported == true then
         lcd.drawBitmap(bx, by, bmp)
     elseif bitmapBasicSupported == nil then
-        local ok = pcall(function()
-            lcd.drawBitmap(bx, by, bmp)
-        end)
+        local ok = pcall(lcd.drawBitmap, bx, by, bmp)
         bitmapBasicSupported = ok
     end
     if type(lcd.setClipping) == "function" then
@@ -248,53 +273,45 @@ local function drawBitmapBox(x, y, w, h, bmp)
     end
 end
 local function polarPoint(cx, cy, deg, radius)
-    local angle = math.rad(deg)
-    return cx + math.floor(math.cos(angle) * radius), cy + math.floor(math.sin(angle) * radius)
+    local angle = deg * 0.017453292519943
+    local x, y = math.cos(angle) * radius, math.sin(angle) * radius
+    x = x >= 0 and math.floor(x + 0.5) or math.ceil(x - 0.5)
+    y = y >= 0 and math.floor(y + 0.5) or math.ceil(y - 0.5)
+    return cx + x, cy + y
 end
-local function drawHeavyLine(x1, y1, x2, y2, weight)
+local function drawHeavyLine(x1, y1, x2, y2)
     lcd.drawLine(x1, y1, x2, y2)
-    for i = 1, weight do
-        lcd.drawLine(x1 + i, y1, x2 + i, y2)
-        lcd.drawLine(x1, y1 + i, x2, y2 + i)
-    end
+    lcd.drawLine(x1 + 1, y1, x2 + 1, y2)
 end
 local function drawHeavyText(x, y, text, weight)
-    lcd.drawText(x, y, text)
-    for i = 1, weight do
-        lcd.drawText(x + i, y, text)
-    end
+    drawText(x, y, text)
+    if weight and weight > 0 then drawText(x + 1, y, text) end
 end
-local function objectField(obj, key)
-    local ok, value = pcall(function() return obj and obj[key] end)
-    return ok and value or nil
-end
-local function methodValue(obj, key)
-    local fn = objectField(obj, key)
-    if type(fn) ~= "function" then return nil end
-    local ok, value = pcall(fn, obj)
-    if not ok then ok, value = pcall(fn) end
+local function member(obj, key) return obj[key] end
+local function safeMember(obj, key)
+    local ok, value = pcall(member, obj, key)
     return ok and value or nil
 end
 local function getVal(src)
     if not src then
-        return 0
+        return 0, false
     end
     local t = type(src)
-    if t == "number" then
-        return src
-    end
-    if t == "string" then
-        local direct = tonumber(src)
-        if direct then
-            return direct
-        end
+    if t == "number" or t == "string" or t == "boolean" then
+        local value = finiteNumber(src)
+        return value or 0, value ~= nil
     end
     if t == "table" or t == "userdata" then
-        local value = methodValue(src, "value")
-        if value ~= nil then return tonumber(value) or 0 end
-        value = objectField(src, "value")
-        if type(value) == "number" or type(value) == "string" then
-            return tonumber(value) or 0
+        local valueMember = safeMember(src, "value")
+        if type(valueMember) == "function" then
+            local ok, value = pcall(valueMember, src)
+            value = ok and finiteNumber(value) or nil
+            return value or 0, value ~= nil
+        end
+        if type(valueMember) == "number" or type(valueMember) == "string"
+            or type(valueMember) == "boolean" then
+            local value = finiteNumber(valueMember)
+            return value or 0, value ~= nil
         end
     end
     local s
@@ -302,81 +319,86 @@ local function getVal(src)
         local ok, resolved = pcall(system.getSource, src)
         if ok then s = resolved end
     end
-    local value = methodValue(s, "value")
-    if value ~= nil then return tonumber(value) or 0 end
-    return 0
+    if s and type(s.value) == "function" then
+        local ok, value = pcall(s.value, s)
+        value = ok and finiteNumber(value) or nil
+        return value or 0, value ~= nil
+    end
+    return 0, false
 end
 local function sourceName(src, fallback)
-    local nm = methodValue(src, "name")
-    if nm and nm ~= "" then return nm end
+    local kind = type(src)
+    if kind ~= "table" and kind ~= "userdata" then return fallback end
+    local nameMember = src and safeMember(src, "name")
+    if type(nameMember) == "function" then
+        local ok, nm = pcall(nameMember, src)
+        if ok and nm and nm ~= "" then
+            return tostring(nm)
+        end
+    end
     return fallback
+end
+local function sourcePresent(src)
+    if src == nil or src == false or src == 0 or src == "" or src == "---" then return false end
+    local kind = type(src)
+    if kind ~= "table" and kind ~= "userdata" then return true end
+    local name = safeMember(src, "name")
+    if type(name) == "function" then
+        local ok
+        ok, name = pcall(name, src)
+        if not ok then return true end
+        name = name and tostring(name) or ""
+        return name ~= "" and name ~= "---"
+    end
+    return true
+end
+local function sourceUnit(src)
+    local kind = type(src)
+    if kind ~= "table" and kind ~= "userdata" then return "" end
+    local unit = src and safeMember(src, "stringUnit")
+    if type(unit) == "function" then
+        local ok, value = pcall(unit, src)
+        if ok and value then return tostring(value) end
+    elseif unit then
+        return tostring(unit)
+    end
+    return ""
+end
+local function filteredValue(w, key, raw, alpha)
+    raw = finiteNumber(raw) or 0
+    w._filtered = w._filtered or {}
+    local previous = finiteNumber(w._filtered[key])
+    local value = previous == nil and raw or previous + (raw - previous) * (alpha or 0.3)
+    w._filtered[key] = value
+    return value
 end
 local function switchBase(k)
     if not k then
         return nil
     end
     k = tostring(k)
-    return k:match("S[A-Z]") or k:match("s[a-z]") or nil
+    return k:match("S[A-H]") or k:match("s[a-h]") or nil
 end
-local function sourceQuery(k)
-    if not k then return nil end
-    local category, member, options = tostring(k):match("^([^:]+):([^:]+):([^:]+)$")
-    if not category or not member then return nil end
-    return {
-        category = tonumber(category) or category,
-        member = tonumber(member) or member,
-        options = tonumber(options) or options,
-    }
+local function trySourceMethod(method, key)
+    local fn = system and system[method]
+    if type(fn) ~= "function" or not key then return nil end
+    local ok, source = pcall(fn, key)
+    return ok and source or nil
 end
 local function resolveSwitch(val)
     if not val or val == "" then
         return nil
     end
-    if system and type(system.getSource) == "function" then
-        local query = sourceQuery(val)
-        if query then
-            local ok, sw = pcall(function() return system.getSource(query) end)
-            if ok and sw then return sw end
-        end
-    end
-    local tries = {}
-    tries[#tries + 1] = val
-    local text = tostring(val)
-    tries[#tries + 1] = text:upper()
-    tries[#tries + 1] = text:lower()
-    local number = tonumber(text)
-    if number then tries[#tries + 1] = number end
-    local base = switchBase(text)
-    if base then
-        tries[#tries + 1] = base:upper()
-        tries[#tries + 1] = base:lower()
-    end
-    for i = 1, #tries do
-        local k = tries[i]
-        if system and type(system.getSource) == "function" then
-            local ok, sw = pcall(function()
-                return system.getSource(k)
-            end)
-            if ok and sw then
-                return sw
-            end
-        end
-    end
-    for i = 1, #tries do
-        local k = tries[i]
-        if system and type(system.getSwitch) == "function" then
-            local ok, sw = pcall(function()
-                return system.getSwitch(k)
-            end)
-            if ok and sw then
-                return sw
-            end
-        end
-    end
+    local upper, lower = tostring(val):upper(), tostring(val):lower()
+    local base = switchBase(val)
+    local sw = trySourceMethod("getSource", val) or trySourceMethod("getSource", upper) or trySourceMethod("getSource", lower)
+    if not sw and base then sw = trySourceMethod("getSource", base:upper()) or trySourceMethod("getSource", base:lower()) end
+    sw = sw or trySourceMethod("getSwitch", val) or trySourceMethod("getSwitch", upper) or trySourceMethod("getSwitch", lower)
+    if not sw and base then sw = trySourceMethod("getSwitch", base:upper()) or trySourceMethod("getSwitch", base:lower()) end
+    if sw then return sw end
     return nil
 end
 local function formatTime(seconds)
-    seconds = math.max(0, math.floor(seconds or 0))
     local m = math.floor(seconds / 60)
     local s = seconds % 60
     return string.format("%02d:%02d", m, s)
@@ -386,11 +408,28 @@ local function timerSeconds(w)
     return (w and w.timerSource and getVal(w.timerSource)) or (w and w.flightTime) or 0
 end
 
+local function timerText(w)
+    local seconds = clamp(math.floor(finiteNumber(timerSeconds(w)) or 0), 0, 359999)
+    if w._timerTextSeconds ~= seconds then
+        w._timerTextSeconds, w._timerText = seconds, formatTime(seconds)
+    end
+    return w._timerText
+end
+
+local function flightCountText(w)
+    local count = clamp(math.floor(finiteNumber(w.flightCount) or 0), 0, 9999)
+    if w._flightLabelCount ~= count or w._flightLabelLanguage ~= w.language then
+        w._flightLabelCount, w._flightLabelLanguage = count, w.language
+        w._flightLabel = tostring(count) .. " " .. T(w, "Flights")
+    end
+    return w._flightLabel
+end
+
 local function formatValue(v)
     if v == nil then
         return "--"
     end
-    v = tonumber(v)
+    v = finiteNumber(v)
     if not v then
         return "--"
     end
@@ -404,145 +443,62 @@ local function formatValue(v)
     end
     return string.format("%.2f", v)
 end
+local function wholeNumber(v)
+    return v >= 0 and math.floor(v + 0.5) or math.ceil(v - 0.5)
+end
+local function formatAmps(v)
+    v = tonumber(v) or 0
+    if math.abs(v) >= 1000 then return formatValue(v / 1000) .. "kA" end
+    return formatValue(v) .. "A"
+end
 local batteryProfiles = {
-    {3.7, 3.2, 4.2, {
-            3.2,
-            0,
-            3.5,
-            5,
-            3.65,
-            10,
-            3.72,
-            20,
-            3.77,
-            30,
-            3.8,
-            40,
-            3.83,
-            50,
-            3.87,
-            60,
-            3.92,
-            70,
-            3.98,
-            80,
-            4.08,
-            90,
-            4.2,
-            100,
-        },
-    },
-    {3.8, 3.2, 4.35, {
-            3.2,
-            0,
-            3.55,
-            5,
-            3.7,
-            10,
-            3.78,
-            20,
-            3.83,
-            30,
-            3.87,
-            40,
-            3.91,
-            50,
-            3.96,
-            60,
-            4.02,
-            70,
-            4.1,
-            80,
-            4.22,
-            90,
-            4.35,
-            100,
-        },
-    },
-    {3.6, 3.0, 4.2, {
-            3.0,
-            0,
-            3.25,
-            5,
-            3.4,
-            10,
-            3.5,
-            20,
-            3.58,
-            30,
-            3.64,
-            40,
-            3.7,
-            50,
-            3.77,
-            60,
-            3.84,
-            70,
-            3.92,
-            80,
-            4.02,
-            90,
-            4.2,
-            100,
-        },
-    },
-    {3.3, 2.8, 3.6, {
-            2.8,
-            0,
-            3.0,
-            5,
-            3.15,
-            10,
-            3.22,
-            20,
-            3.25,
-            30,
-            3.27,
-            40,
-            3.29,
-            50,
-            3.3,
-            60,
-            3.31,
-            70,
-            3.33,
-            80,
-            3.36,
-            90,
-            3.6,
-            100,
-        },
-    },
-    {1.2, 0.95, 1.45, {
-            0.95,
-            0,
-            1.05,
-            10,
-            1.1,
-            20,
-            1.15,
-            30,
-            1.18,
-            40,
-            1.2,
-            50,
-            1.22,
-            60,
-            1.24,
-            70,
-            1.27,
-            80,
-            1.32,
-            90,
-            1.45,
-            100,
-        },
-    },
+    {3.7, 3.0, 4.2, {3.0, 0, 3.58, 10, 3.66, 20, 3.72, 30, 3.77, 40, 3.81, 50,
+        3.86, 60, 3.90, 70, 3.95, 80, 4.01, 90, 4.15, 100, 4.2, 100}},
+    {3.8, 3.0, 4.35, {3.0, 0, 3.44, 10, 3.54, 20, 3.61, 30, 3.68, 40, 3.74, 50,
+        3.82, 60, 3.90, 70, 3.98, 80, 4.05, 90, 4.30, 100, 4.35, 100}},
+    {3.6, 2.85, 4.2, {2.85, 0, 3.20, 10, 3.38, 20, 3.53, 30, 3.61, 40, 3.72, 50,
+        3.82, 60, 3.90, 70, 3.99, 80, 4.07, 90, 4.16, 100, 4.2, 100}},
+    {3.3, 2.0, 3.6, {2.0, 0, 3.15, 10, 3.22, 20, 3.25, 30, 3.26, 40, 3.27, 50,
+        3.28, 60, 3.29, 70, 3.30, 80, 3.31, 90, 3.35, 100, 3.6, 100}},
+    {1.2, 1.0, 1.45, {1.0, 0, 1.16, 10, 1.20, 20, 1.22, 30, 1.24, 40, 1.25, 50,
+        1.26, 60, 1.27, 70, 1.28, 80, 1.31, 90, 1.40, 100, 1.45, 100}},
 }
 local function batteryProfile(w)
     return batteryProfiles[clamp(math.floor(tonumber(w.batteryType) or 1), 1, #batteryProfiles)]
 end
-local function fitText(txt, maxW)
+local batteryThresholds = {
+    {4.15, 3.75, 3.45}, {4.25, 3.85, 3.50}, {4.10, 3.60, 3.20},
+    {3.40, 3.25, 3.10}, {1.35, 1.15, 1.00},
+}
+local function sameThresholds(w, values)
+    return math.abs((w.battHigh or 0) - values[1]) < 0.001
+        and math.abs((w.battMid or 0) - values[2]) < 0.001
+        and math.abs((w.battLow or 0) - values[3]) < 0.001
+end
+local function applyBatteryType(w, value)
+    local oldType = clamp(math.floor(tonumber(w.batteryType) or 1), 1, #batteryThresholds)
+    local newType = clamp(math.floor(tonumber(value) or 1), 1, #batteryThresholds)
+    if sameThresholds(w, batteryThresholds[oldType]) then
+        local defaults = batteryThresholds[newType]
+        w.battHigh, w.battMid, w.battLow = defaults[1], defaults[2], defaults[3]
+    end
+    w.batteryType = newType
+    w._batteryLevels = nil
+end
+local function applyProfile(w, value)
+    local profile = clamp(math.floor(tonumber(value) or 1), 1, 5)
+    w.powerProfile = profile
+    w.powerSourceType = profile == 4 and 2 or 1
+    w.batteryMode = profile == 2 and 2 or 1
+    w.rotorwingMode = profile == 3 and 2 or 1
+end
+
+local function textPrefix(text, count, utf8Text)
+    if not utf8Text then return text:sub(1, count) end
+    local nextByte = utf8.offset(text, count + 1)
+    return text:sub(1, nextByte and nextByte - 1 or #text)
+end
+fitText = function(txt, maxW)
     txt = tostring(txt or "")
     if maxW <= 0 then
         return ""
@@ -553,19 +509,24 @@ local function fitText(txt, maxW)
     if getTextW(".") > maxW then
         return ""
     end
-    while #txt > 0 and getTextW(txt .. ".") > maxW do
-        txt = txt:sub(1, #txt - 1)
+    local utf8Length = utf8 and utf8.len and utf8.len(txt)
+    local length = utf8Length or #txt
+    local low, high = 0, length - 1
+    while low < high do
+        local middle = math.ceil((low + high) / 2)
+        if getTextW(textPrefix(txt, middle, utf8Length) .. ".") <= maxW then low = middle
+        else high = middle - 1 end
     end
-    return txt .. "."
+    return textPrefix(txt, low, utf8Length) .. "."
 end
 local function fitStatusText(label, state, maxW, scale)
     local suffix = ": " .. state
     local txt = label .. suffix
-    setFontSize("large", scale)
+    setFontSize("large")
     if getTextW(txt) <= maxW then
         return txt
     end
-    setFontSize("small", scale)
+    setFontSize("small")
     if getTextW(txt) <= maxW then
         return txt
     end
@@ -579,7 +540,7 @@ local function armValueActive(value)
     if type(value) == "boolean" then
         return value
     end
-    value = tonumber(value) or 0
+    value = finiteNumber(value) or 0
     return value > 0
 end
 local function switchActive(sw, key)
@@ -599,18 +560,25 @@ local function switchActive(sw, key)
             return armValueActive(value)
         end
         local resolved = resolveSwitch(sw)
-        return resolved and resolved ~= sw and switchActive(resolved) or false
+        return resolved and resolved ~= sw and switchActive(resolved, nil) or false
     end
     if t == "table" or t == "userdata" then
-        local v = methodValue(sw, "state")
-        if v ~= nil then return armValueActive(v) end
-        v = methodValue(sw, "active")
-        if v ~= nil then return armValueActive(v) end
-        v = methodValue(sw, "value")
-        if v ~= nil then return armValueActive(v) end
-        v = objectField(sw, "value")
-        if type(v) == "number" or type(v) == "string" then
-            return armValueActive(v)
+        local activeMember = safeMember(sw, "active")
+        if type(activeMember) == "function" then
+            local ok, v = pcall(activeMember, sw)
+            if ok then
+                return armValueActive(v)
+            end
+        end
+        local valueMember = safeMember(sw, "value")
+        if type(valueMember) == "function" then
+            local ok, v = pcall(valueMember, sw)
+            if ok then
+                return armValueActive(v)
+            end
+        end
+        if type(valueMember) == "number" or type(valueMember) == "string" then
+            return armValueActive(valueMember)
         end
     end
     return armValueActive(getVal(sw))
@@ -619,13 +587,21 @@ local function create()
     return {
         armDelay = 5,
         inFlightScreen = 1,
-        iconLoaded = false,
         cellCount = 0,
         batteryType = 1,
-        language = i18n.default(),
+        language = i18n.systemDefault(),
         themeMode = 1,
+        fontSize = 2,
         batteryStyle = 1,
+        powerProfile = 1,
         powerSourceType = 1,
+        batteryMode = 1,
+        rotorwingMode = 1,
+        rpmMax = 8000,
+        rpmWarn = 6400,
+        flightMinSeconds = 15,
+        packWarn = 0.10,
+        packBad = 0.20,
         fuelShowPercent = 1,
         statusMode = 1,
         battHigh = 4.15,
@@ -633,10 +609,12 @@ local function create()
         battLow = 3.45,
         linkHigh = 98,
         linkMid = 80,
+        linkMode = 1,
         currentHigh = 60,
         currentMid = 35,
         fuelHigh = 40,
         fuelMid = 20,
+        fuelMode = 1,
         field1High = 0,
         field1Mid = 0,
         field1Mode = 1,
@@ -648,35 +626,28 @@ local function create()
         field3Mode = 2,
         field4High = 80,
         field4Mid = 30,
+        field4Mode = 1,
         telemetry4High = 80,
         telemetry4Mid = 30,
         telemetry4Mode = 1,
-        linkMin = nil,
-        linkMinSource = nil,
-        linkSeenAt = nil,
         flightActive = false,
         postFlight = false,
         flightStart = 0,
         flightTime = 0,
         flightCount = 0,
-        timerSource = nil,
         dirty = false,
         dirtyAt = 0,
         nextRefresh = 0,
     }
 end
 local function storageCall(method, widget)
-    if not storageModule then
-        local chunk = loadfile("storage.lua")
-        if not chunk then return false end
-        local ok, module = pcall(chunk)
-        if not ok or type(module) ~= "table" then return false end
-        storageModule = module
-    end
-    local fn = storageModule[method]
+    local chunk = loadfile("storage.lua")
+    if not chunk then return false end
+    local ok, module = pcall(chunk)
+    if not ok or type(module) ~= "table" then return false end
+    local fn = module[method]
     if type(fn) ~= "function" then return false end
-    local ok, result = pcall(fn, widget, i18n.valid)
-    return ok and result or false
+    return fn(widget, i18n.valid)
 end
 local function read(widget) return storageCall("read", widget) end
 local function write(widget) return storageCall("write", widget) end
@@ -695,13 +666,17 @@ local function configure(widget)
         module.configure(widget, {
             clamp = clamp,
             languageCodes = i18n.codes,
+            sourcePresent = sourcePresent,
             tr = i18n.text,
+            applyBatteryType = applyBatteryType,
+            applyProfile = applyProfile,
         })
     end
 end
 local function score(w, prefix, value, c)
-    local high = w[prefix .. "High"] or 0
-    local mid = w[prefix .. "Mid"] or 0
+    local high = prefix == "rpm" and (w.rpmMax or 8000) or (w[prefix .. "High"] or 0)
+    local mid = prefix == "rpm" and (w.rpmWarn or 6400) or (w[prefix .. "Mid"] or 0)
+    if high == 0 and mid == 0 then return c.neutral, "INFO" end
     if high < mid then
         high, mid = mid, high
     end
@@ -714,7 +689,7 @@ local function score(w, prefix, value, c)
         end
         return c.good, ":)"
     end
-    local mode = w[prefix .. "Mode"] or 1
+    local mode = prefix == "rpm" and 2 or (w[prefix .. "Mode"] or 1)
     if mode == 2 then
         if value < mid then
             return c.good, ":)"
@@ -733,12 +708,14 @@ local function score(w, prefix, value, c)
     return c.bad, ":("
 end
 local function statStatus(w, key, st, c)
-    if key == "rpm" then
+    if key == "battTotal" then
         return c.neutral, "INFO"
     end
-    local mode = w[key .. "Mode"] or 1
-    local value = mode == 2 and st.max or st.min
-    local col, face = score(w, key, value, c)
+    local prefix = (key == "batt1" or key == "batt2") and "batt" or key
+    local mode = prefix == "rpm" and 2 or (w[prefix .. "Mode"] or 1)
+    local value = (prefix == "current" or mode == 2) and st.max or st.min
+    local col, face = score(w, prefix, value, c)
+    if face == "INFO" then return col, face end
     if face == ":)" then
         return col, "OK :)"
     end
@@ -757,9 +734,11 @@ local function drawPostFlight(w, c, scale, scrW, scrH)
         summaryApi = {
             px = px,
             getTextW = getTextW,
+            getTextH = getTextH,
             setFontSize = setFontSize,
-            formatTime = formatTime,
-            timerSeconds = timerSeconds,
+            setFittingFont = setFittingFont,
+            timerText = timerText,
+            flightCountText = flightCountText,
             formatValue = formatValue,
             fitText = fitText,
             statStatus = statStatus,
@@ -770,14 +749,11 @@ local function drawPostFlight(w, c, scale, scrW, scrH)
     summaryModule.draw(w, c, scale, scrW, scrH, summaryApi)
 end
 local function resetStats(w)
-    w.stats = {
-    }
-    w.statOrder = {
-    }
+    w.stats, w.statOrder = {}, {}
 end
 local function pushStat(w, key, label, value)
     if value == nil then
-        return 
+        return
     end
     if not w.stats then
         resetStats(w)
@@ -801,31 +777,13 @@ local function pushStat(w, key, label, value)
     end
 end
 local function cellsFor(w, batt)
-    batt = tonumber(batt) or 0
-    local cells = tonumber(w.cellCount) or 0
-    local profile = batteryProfile(w)
-    local reference = profile[3]
-    if (w.batteryType or 1) == 5 then
-        reference = profile[1]
-    end
-    local autoCells = math.max(1, math.min(12, math.floor(batt / reference + 0.5)))
+    batt = finiteNumber(batt) or 0
+    local cells = finiteNumber(w.cellCount) or 0
+    if batt <= 0 then return cells >= 1 and cells or 0 end
     if cells >= 1 then
-        local perCell = batt > 0 and batt / cells or 0
-        if batt > 0 and (perCell > profile[3] + 0.35 or perCell < profile[2] - 0.35) then
-            return autoCells
-        end
         return cells
     end
-    if w.detectedCells and batt > 0 then
-        local detectedPerCell = batt / w.detectedCells
-        if detectedPerCell >= profile[2] - 0.35 and detectedPerCell <= profile[3] + 0.35 then
-            return w.detectedCells
-        end
-    end
-    if batt > 0 then
-        w.detectedCells = autoCells
-    end
-    return autoCells
+    return 0
 end
 local function curvePercent(curve, voltage)
     if voltage <= curve[1] then
@@ -844,14 +802,18 @@ local function curvePercent(curve, voltage)
     end
     return 100
 end
+local sourceHasValue
 local function batteryFuelPercent(w, batt)
     if w.field4Source then
-        return clamp(tonumber(getVal(w.field4Source)) or 0, 0, 100)
+        local value, readable = getVal(w.field4Source)
+        if sourceHasValue(w.field4Source, true, value, readable) then
+            return clamp(value, 0, 100)
+        end
     end
     if not w.batterySource then
         return nil
     end
-    batt = tonumber(batt) or 0
+    batt = finiteNumber(batt) or 0
     if (w.powerSourceType or 1) == 2 then
         return clamp(batt, 0, 100)
     end
@@ -860,7 +822,7 @@ local function batteryFuelPercent(w, batt)
     end
     local cells = cellsFor(w, batt)
     if cells < 1 then
-        return 0
+        return nil
     end
     return clamp(curvePercent(batteryProfile(w)[4], batt / cells), 0, 100)
 end
@@ -881,24 +843,6 @@ local function batteryIconRatio(w, perCell, batt)
     end
     return (perCell - emptyV) / (fullV - emptyV)
 end
-local function batteryIconSlices(ratio)
-    if ratio >= 0.95 then
-        return 5
-    end
-    if ratio >= 0.65 then
-        return 4
-    end
-    if ratio >= 0.45 then
-        return 3
-    end
-    if ratio >= 0.25 then
-        return 2
-    end
-    if ratio > 0.03 then
-        return 1
-    end
-    return 0
-end
 local function batteryIconSlicesFor(ratio, segments)
     segments = math.max(1, math.floor(tonumber(segments) or 1))
     ratio = clamp(tonumber(ratio) or 0, 0, 1)
@@ -910,52 +854,163 @@ local function batteryIconSlicesFor(ratio, segments)
     end
     return clamp(math.ceil(ratio * segments), 1, segments)
 end
+local function batteryColor(w, c, key, perCell)
+    w._batteryLevels = w._batteryLevels or {}
+    local previous = w._batteryLevels[key]
+    local high, mid, margin = w.battHigh or 4.15, w.battMid or 3.75, 0.03
+    if high < mid then high, mid = mid, high end
+    local level = perCell >= high and 3 or (perCell >= mid and 2 or 1)
+    if previous == 3 and perCell >= high - margin then level = 3 end
+    if previous == 2 then
+        if perCell >= high + margin then level = 3
+        elseif perCell >= mid - margin then level = 2 end
+    end
+    if previous == 1 and perCell < mid + margin then level = 1 end
+    w._batteryLevels[key] = level
+    return level == 3 and c.good or (level == 2 and c.warn or c.bad)
+end
+local function powerInfo(w, c)
+    local measured, readable = getVal(w.batterySource)
+    local fuelMode = (w.powerSourceType or 1) == 2
+    local online = sourceHasValue(w.batterySource, fuelMode, measured, readable)
+        and (fuelMode or measured > 0)
+    local raw = online and filteredValue(w, "battery1", measured, 0.25) or 0
+    local value = raw
+    local percent
+    local ratio = 0
+    local perCell = 0
+    local color = c.bad
+    if fuelMode then
+        value = batteryFuelPercent(w, raw) or raw
+        percent = clamp(value, 0, 100)
+        color = percent >= (w.fuelHigh or 40) and c.good or (percent >= (w.fuelMid or 20) and c.warn or c.bad)
+    else
+        local cells = cellsFor(w, raw)
+        if raw > 0 and cells > 0 then
+            perCell = raw / cells
+        end
+        percent = batteryFuelPercent(w, raw)
+        ratio = batteryIconRatio(w, perCell, raw)
+        color = batteryColor(w, c, "battery1", perCell)
+    end
+    local info = w._powerInfo
+    if not info then info = {}; w._powerInfo = info end
+    info.raw, info.value, info.percent, info.ratio = raw, value, percent, ratio
+    info.perCell, info.color, info.fuelMode = perCell, color, fuelMode
+    info.online, info.needsCells = online, online and not fuelMode and cellsFor(w, raw) < 1
+    info.gauge = fuelMode or tonumber(w.batteryStyle) == 2
+    return info
+end
+
+local function batteryPackInfo(w, c, src, slot, info)
+    info = info or {}
+    local measured, readable = getVal(src)
+    local online = measured > 0 and sourceHasValue(src, false, measured, readable)
+    local raw = online and filteredValue(w, "battery" .. slot, measured, 0.25) or 0
+    local cells = cellsFor(w, raw)
+    local perCell = raw > 0 and cells > 0 and raw / cells or 0
+    local percent = perCell > 0 and clamp(curvePercent(batteryProfile(w)[4], perCell), 0, 100) or nil
+    local color = batteryColor(w, c, "battery" .. slot, perCell)
+    info.raw, info.cells, info.perCell, info.percent = raw, cells, perCell, percent
+    info.ratio, info.color = batteryIconRatio(w, perCell, raw), color
+    info.online, info.needsCells = online, online and cells < 1
+    return info
+end
+
+local function dualPowerInfo(w, c)
+    local info = w._dualPowerInfo
+    if not info then info = {{}, {}}; w._dualPowerInfo = info end
+    local first = batteryPackInfo(w, c, w.batterySource, 1, info[1])
+    local second = batteryPackInfo(w, c, w.battery2Source, 2, info[2])
+    local totalRaw, totalReadable = getVal(w.totalBatterySource)
+    local measuredTotal = totalRaw > 0
+        and sourceHasValue(w.totalBatterySource, false, totalRaw, totalReadable)
+        and filteredValue(w, "batteryTotal", totalRaw, 0.25) or nil
+    info.total = measuredTotal or (first.online and second.online and (first.raw + second.raw) or nil)
+    info.totalMeasured = measuredTotal ~= nil
+    info.cells = first.cells + second.cells
+    info.delta = first.online and second.online and math.abs(first.raw - second.raw) or nil
+    info.deltaPerCell = first.perCell > 0 and second.perCell > 0
+        and math.abs(first.perCell - second.perCell) or nil
+    info.color = (first.color == c.bad or second.color == c.bad) and c.bad
+        or (first.color == c.warn or second.color == c.warn) and c.warn or c.good
+    local packWarn, packBad = w.packWarn or 0.10, w.packBad or 0.20
+    if packBad < packWarn then packWarn, packBad = packBad, packWarn end
+    if info.deltaPerCell and info.deltaPerCell >= packBad then info.color = c.bad
+    elseif info.deltaPerCell and info.deltaPerCell >= packWarn and info.color ~= c.bad then
+        info.color = c.warn
+    end
+    return info
+end
+
+local function pushSourceStat(w, key, src, fallback, whole)
+    if not src then return end
+    local value, readable = getVal(src)
+    if sourceHasValue(src, true, value, readable) then
+        pushStat(w, key, sourceName(src, T(w, fallback)), whole and wholeNumber(value) or value)
+    end
+end
+
 local function updateStats(w)
-    local batt = getVal(w.batterySource)
-    local percent = batteryFuelPercent(w, batt)
-    if percent ~= nil and (w.powerSourceType or 1) == 2 then
-        pushStat(w, "fuel", sourceName(w.field4Source, T(w, "Fuel")), percent or 0)
-    elseif w.batterySource and batt > 0 then
-        pushStat(w, "batt", T(w, "Battery/cell"), batt / cellsFor(w, batt))
+    local batt, battReadable = getVal(w.batterySource)
+    local dualMode = (w.powerSourceType or 1) ~= 2 and (w.batteryMode or 1) == 2
+    local percent = dualMode and nil or batteryFuelPercent(w, batt)
+    if dualMode then
+        local batt2, batt2Readable = getVal(w.battery2Source)
+        local total = sourceHasValue(w.totalBatterySource) and getVal(w.totalBatterySource) or nil
+        local cells1, cells2 = cellsFor(w, batt), cellsFor(w, batt2)
+        if batt > 0 and cells1 > 0
+            and sourceHasValue(w.batterySource, false, batt, battReadable) then
+            pushStat(w, "batt1", T(w, "Battery 1/cell"), batt / cells1)
+        end
+        if batt2 > 0 and cells2 > 0
+            and sourceHasValue(w.battery2Source, false, batt2, batt2Readable) then
+            pushStat(w, "batt2", T(w, "Battery 2/cell"), batt2 / cells2)
+        end
+        total = total or (batt > 0 and batt2 > 0
+            and sourceHasValue(w.batterySource, false, batt, battReadable)
+            and sourceHasValue(w.battery2Source, false, batt2, batt2Readable)
+            and (batt + batt2) or nil)
+        if total then
+            pushStat(w, "battTotal", T(w, "Total voltage"), total)
+        end
+    elseif percent ~= nil and (w.powerSourceType or 1) == 2 then
+        pushStat(w, "fuel", sourceName(w.field4Source, T(w, "Fuel")), percent)
+    elseif batt > 0 and sourceHasValue(w.batterySource, false, batt, battReadable) then
+        local cells = cellsFor(w, batt)
+        if cells > 0 then
+            pushStat(w, "batt", T(w, "Battery/cell"), batt / cells)
+        end
     end
-    if w.rssiSource then
-        pushStat(w, "link", sourceName(w.rssiSource, T(w, "Link")), getVal(w.rssiSource))
-    end
-    if w.currentSource then
-        pushStat(w, "current", sourceName(w.currentSource, T(w, "Current")), getVal(w.currentSource))
-    end
-    if w.rpmSource then
-        pushStat(w, "rpm", sourceName(w.rpmSource, "RPM"), getVal(w.rpmSource))
-    end
-    if w.field1Source then
-        pushStat(w, "field1", sourceName(w.field1Source, "Tlm 1"), getVal(w.field1Source))
-    end
-    if w.field2Source then
-        pushStat(w, "field2", sourceName(w.field2Source, "Tlm 2"), getVal(w.field2Source))
-    end
-    if w.field3Source then
-        pushStat(w, "field3", sourceName(w.field3Source, "Tlm 3"), getVal(w.field3Source))
-    end
-    if w.telemetry4Source then
-        pushStat(w, "telemetry4", sourceName(w.telemetry4Source, "Tlm 4"), getVal(w.telemetry4Source))
-    end
+    pushSourceStat(w, "link", w.rssiSource, "Link", true)
+    pushSourceStat(w, "current", w.currentSource, "Current")
+    pushSourceStat(w, "rpm", w.rpmSource, "RPM")
+    pushSourceStat(w, "field1", w.field1Source, "Tlm 1")
+    pushSourceStat(w, "field2", w.field2Source, "Tlm 2")
+    pushSourceStat(w, "field3", w.field3Source, "Tlm 3")
+    pushSourceStat(w, "telemetry4", w.telemetry4Source, "Tlm 4")
     if percent ~= nil and (w.powerSourceType or 1) ~= 2 then
         pushStat(w, "field4", sourceName(w.field4Source, T(w, "Battery percentage")), percent)
     end
 end
 local function updateFlight(w, now)
     now = now or os.clock()
-    local armed = switchActive(w.armSwitch, w.armSwitchKey)
+    if not w.armSwitch and w.armSwitchKey and now >= (w.armResolveAt or 0) then
+        w.armSwitch = resolveSwitch(w.armSwitchKey)
+        w.armResolveAt = now + 2
+    end
+    local armed = switchActive(w.armSwitch, nil)
     if armed then
+        w.postFlight = false
         if not w.armSeenAt then
             w.armSeenAt = now
         end
         if not w.flightActive and now - w.armSeenAt >= (w.armDelay or 5) then
             w.flightActive = true
             w.postFlight = false
-            summaryModule, summaryApi = nil, nil
             w.flightStart = now
             w.flightTime = 0
+            w._flightSessionCounted = false
             resetStats(w)
         end
     end
@@ -970,14 +1025,15 @@ local function updateFlight(w, now)
             updateStats(w)
             w.flightActive = false
             w.postFlight = true
-            if (w.flightTime or 0) >= 15 then
-                w.flightCount = (tonumber(w.flightCount) or 0) + 1
+            if (w.flightTime or 0) >= (w.flightMinSeconds or 15) and not w._flightSessionCounted then
+                w.flightCount = math.min(9999, (tonumber(w.flightCount) or 0) + 1)
+                w._flightSessionCounted = true
                 w.dirty = true
                 w.dirtyAt = now
-                flush(w)
             end
         end
     end
+    return armed
 end
 local function updateLinkMinimum(w, now)
     local src = w.rssiSource
@@ -988,9 +1044,10 @@ local function updateLinkMinimum(w, now)
     if w.linkMinSource ~= src then
         w.linkMinSource, w.linkSeenAt, w.linkMin = src, nil, nil
     end
-    local link = clamp(tonumber(getVal(src)) or 0, 0, 100)
+    local measured, readable = getVal(src)
+    local link = wholeNumber(measured)
     if not w.linkSeenAt then
-        if link > 0 then
+        if sourceHasValue(src, true, measured, readable) then
             w.linkSeenAt = now
         end
         return
@@ -998,6 +1055,7 @@ local function updateLinkMinimum(w, now)
     if now - w.linkSeenAt < LINK_MIN_GRACE then
         return
     end
+    if not sourceHasValue(src, true, measured, readable) then return end
     if w.linkMin == nil or link < w.linkMin then
         w.linkMin = link
     end
@@ -1008,63 +1066,115 @@ local sourceValidityMethods = {
     "isAvailable",
     "available",
 }
-local function sourceHasValue(src, allowZero)
+local compactPairedFonts = {
+    {fontS or fontL}, {fontL or fontS, fontS or fontL},
+    {fontXL or fontL or fontS, fontL or fontS, fontS or fontL},
+}
+local widePairedFonts = {
+    {fontL or fontS, fontS or fontL},
+    {fontXL or fontL or fontS, fontL or fontS, fontS or fontL},
+    {fontXXL or fontXL or fontL or fontS, fontXL or fontL or fontS,
+        fontL or fontS, fontS or fontL},
+}
+sourceHasValue = function(src, allowZero, measured, readable)
     if not src then
         return false
     end
-    if getVal(src) ~= 0 then
+    local explicitlyValid
+    local t = type(src)
+    if t == "table" or t == "userdata" then
+        for i = 1, #sourceValidityMethods do
+            local fn = safeMember(src, sourceValidityMethods[i])
+            if type(fn) == "function" then
+                local ok, valid = pcall(fn, src)
+                if not ok then return false end
+                if ok and type(valid) == "boolean" then
+                    if not valid then return false end
+                    explicitlyValid = true
+                    break
+                end
+                if ok and type(valid) == "number" then
+                    if valid == 0 then return false end
+                    explicitlyValid = true
+                    break
+                end
+            elseif type(fn) == "boolean" or type(fn) == "number" then
+                if fn == false or fn == 0 then return false end
+                explicitlyValid = true
+                break
+            end
+        end
+    end
+    if measured == nil then measured, readable = getVal(src) end
+    if readable == false then return false end
+    if (finiteNumber(measured) or 0) ~= 0 then
         return true
     end
     if not allowZero then
         return false
     end
-    local t = type(src)
-    if t == "table" or t == "userdata" then
-        for i = 1, #sourceValidityMethods do
-            local fn = objectField(src, sourceValidityMethods[i])
-            if type(fn) == "function" then
-                local ok, valid = pcall(fn, src)
-                if ok and type(valid) == "boolean" then
-                    return valid
-                end
-                if ok and type(valid) == "number" then
-                    return valid ~= 0
-                end
-            end
-        end
+    if explicitlyValid ~= nil then
+        return explicitlyValid
     end
     return true
 end
 local function telemetryPresent(w)
     local fuelMode = (w.powerSourceType or 1) == 2
+    if not fuelMode and (w.batteryMode or 1) == 2 then
+        local first, firstReadable = getVal(w.batterySource)
+        if first > 0 and sourceHasValue(w.batterySource, false, first, firstReadable) then return true end
+        local second, secondReadable = getVal(w.battery2Source)
+        return second > 0 and sourceHasValue(w.battery2Source, false, second, secondReadable)
+    end
     if w.rssiSource then
         return sourceHasValue(w.rssiSource)
     end
     if w.batterySource then
-        return sourceHasValue(w.batterySource, fuelMode)
+        local value, readable = getVal(w.batterySource)
+        return sourceHasValue(w.batterySource, fuelMode, value, readable) and (fuelMode or value > 0)
     end
     if w.currentSource then
-        return sourceHasValue(w.currentSource)
+        return sourceHasValue(w.currentSource, true)
     end
     if w.rpmSource then
-        return sourceHasValue(w.rpmSource)
+        return sourceHasValue(w.rpmSource, true)
     end
     if w.field1Source then
-        return sourceHasValue(w.field1Source)
+        return sourceHasValue(w.field1Source, true)
     end
     if w.field2Source then
-        return sourceHasValue(w.field2Source)
+        return sourceHasValue(w.field2Source, true)
     end
     if w.field3Source then
-        return sourceHasValue(w.field3Source)
+        return sourceHasValue(w.field3Source, true)
     end
     if w.telemetry4Source then
-        return sourceHasValue(w.telemetry4Source)
+        return sourceHasValue(w.telemetry4Source, true)
     end
     if w.field4Source then
         return sourceHasValue(w.field4Source, true)
     end
-    return true
+    return false
+end
+local function updateAudioCues(w, armed)
+    local cue
+    local armSource = w.armSwitch or w.armSwitchKey
+    if sourcePresent(armSource) then
+        if w._audioArmSource ~= armSource then
+            w._audioArmSource, w._audioArmed = armSource, armed
+        elseif w._audioArmed ~= armed then
+            cue = armed and "armed" or "disarm"
+            w._audioArmed = armed
+        end
+    else
+        w._audioArmSource, w._audioArmed = nil, nil
+    end
+    local firstTelemetry = not w._telemetryCuePlayed and telemetryPresent(w)
+    if firstTelemetry then
+        w._telemetryCuePlayed = true
+        if not cue then cue = "beep" end
+    end
+    if cue then playCue(cue) end
 end
 local function drawNoTelemetry(w, c, scrW, scrH)
     if math.floor(os.clock() * 2) % 2 == 0 then
@@ -1072,503 +1182,880 @@ local function drawNoTelemetry(w, c, scrW, scrH)
         local warnH = math.max(36, math.floor(scrH * 0.18))
         local warnY = math.floor(scrH * 0.34)
         local warnX = px(8, scale, 4, 12)
-        roundPanel(warnX, warnY, scrW - warnX * 2, warnH, px(8, scale, 4, 10), c.alertBg, c.alertOutline)
+        roundPanel(warnX, warnY, scrW - warnX * 2, warnH, c.alertBg, c.alertOutline)
         local msg = T(w, "NO TELEMETRY")
-        setFontSize("huge", scale)
+        setFittingFont("large", msg, scrW - warnX * 2 - 8, warnH - 4)
         local msgW = getTextW(msg) or 0
-        if msgW > scrW - 8 then
-            setFontSize("large", scale)
-            msgW = getTextW(msg) or 0
-        end
-        if msgW > scrW - 8 then
-            setFontSize("small", scale)
-            msgW = getTextW(msg) or 0
-        end
         local x = math.floor((scrW - msgW) / 2)
-        local y = warnY + math.floor(warnH * 0.3)
+        local y = warnY + math.max(1, math.floor((warnH - getTextH(msg)) / 2))
         if c.alertOutline then
             local o = px(2, scale, 1, 2)
             lcd.color(c.alertOutline)
-            lcd.drawText(x - o, y, msg)
-            lcd.drawText(x + o, y, msg)
-            lcd.drawText(x, y - o, msg)
-            lcd.drawText(x, y + o, msg)
+            drawText(x - o, y, msg)
+            drawText(x + o, y, msg)
+            drawText(x, y - o, msg)
+            drawText(x, y + o, msg)
         end
         lcd.color(c.alertText)
-        lcd.drawText(x, y, msg)
+        drawText(x, y, msg)
     end
-end
-local function drawLinkMinText(w, scale, x, y, width, height)
-    local value = w.linkMin
-    local txt = T(w, "Min") .. ": " .. (value ~= nil and (tostring(math.floor(value + 0.5)) .. "%") or "--")
-    if value ~= nil then
-        local innerX = x + 2
-        local innerW = math.max(1, width - 4)
-        local markerW = px(2, scale, 1, 3)
-        local markerX = innerX + math.floor(innerW * clamp(value, 0, 100) / 100)
-        markerX = clamp(markerX, innerX, innerX + innerW - markerW)
-        local markerY = y + 2
-        local markerH = math.max(1, height - 4)
-        lcd.color(lcd.RGB(0, 0, 0))
-        lcd.drawFilledRectangle(markerX - 1, markerY, markerW + 2, markerH)
-        lcd.color(lcd.RGB(255, 255, 255))
-        lcd.drawFilledRectangle(markerX, markerY, markerW, markerH)
-    end
-    setFontSize("small", scale)
-    local tw = getTextW(txt) or 0
-    if tw > width - 4 then
-        return
-    end
-    local tx = x + math.floor((width - tw) / 2)
-    local ty = y + math.max(0, math.floor((height - px(22, scale, 14, 28)) / 2) - px(5, scale, 2, 7))
-    local o = px(1, scale, 1, 2)
-    lcd.color(lcd.RGB(0, 0, 0))
-    lcd.drawText(tx - o, ty, txt)
-    lcd.drawText(tx + o, ty, txt)
-    lcd.drawText(tx, ty - o, txt)
-    lcd.drawText(tx, ty + o, txt)
-    lcd.color(lcd.RGB(255, 255, 255))
-    lcd.drawText(tx, ty, txt)
-end
-local function drawSourceRight(src, fallback, rightX, y, suffix)
-    if not src then
-        return 
-    end
-    local txt = string.format("%s: %s%s",
-        sourceName(src, fallback), formatValue(getVal(src)), suffix or "")
-    lcd.drawText(rightX - (getTextW(txt) or 0), y, txt)
-end
-local function drawCurrentRight(w, rightX, y, scale)
-    if not w.currentSource then return end
-    local txt = string.format("%s: %sA",
-        sourceName(w.currentSource, T(w, "Current")), formatValue(getVal(w.currentSource)))
-    local bold = px(1, scale, 1, 2)
-    local x = rightX - (getTextW(txt) or 0) - bold
-    lcd.drawText(x, y, txt)
-    lcd.drawText(x + bold, y, txt)
 end
 local function statusActive(w)
     local value = getVal(w.statusSource)
     local mode = tonumber(w.statusMode) or 1
     if mode == 2 then
-        return value < 0, value
+        return value < 0
     end
-    return value > 0, value
+    return value > 0
 end
 local function drawStatusBar(w, c, scale, x, y, width, height)
-    if not w.statusSource then
-        return false
+    if not sourcePresent(w.statusSource) then
+        return
     end
     local active = statusActive(w)
     local fill = active and c.good or c.bad
     local label = sourceName(w.statusSource, T(w, "Status"))
-    local state = active and "ON" or "OFF"
+    local state = T(w, active and "On" or "Off"):upper()
     local pad = px(8, scale, 4, 12)
     local txt = fitStatusText(label, state, width - pad * 2, scale)
-    roundPanel(x, y, width, height, px(7, scale, 3, 9), fill, c.outline)
+    roundPanel(x, y, width, height, fill, c.outline)
+    setFittingFont("large", txt, width - pad * 2 - px(2, scale, 1, 2), height - 2)
     local tx = x + math.floor((width - (getTextW(txt) or 0)) / 2)
     local ty = y + math.max(1, math.floor((height - getTextH(txt)) / 2))
     local bold = px(1, scale, 1, 2)
     lcd.color(lcd.RGB(0, 0, 0))
-    lcd.drawText(tx, ty, txt)
-    lcd.drawText(tx + bold, ty, txt)
-    return true
+    drawText(tx, ty, txt)
+    drawText(tx + bold, ty, txt)
 end
-local function statKeyForSource(w, src)
-    if not src then
-        return nil
+local function gaugeColor(c, value, lowGood, mid, high)
+    if lowGood then
+        if value >= high then return c.bad end
+        if value >= mid then return c.warn end
+        return c.good
     end
-    if src == w.rssiSource then
-        return "link"
-    end
-    if src == w.currentSource then
-        return "current"
-    end
-    if src == w.field1Source then
-        return "field1"
-    end
-    if src == w.field2Source then
-        return "field2"
-    end
-    if src == w.field3Source then
-        return "field3"
-    end
-    if src == w.telemetry4Source then
-        return "telemetry4"
-    end
-    if src == w.field4Source then
-        return "field4"
-    end
-    return nil
+    if value < mid then return c.bad end
+    if value < high then return c.warn end
+    return c.good
 end
-local function drawFuelGauge(w, c, scale, mainLeft, mainW, topY, bottomY, fuelValue, sizeScale, centerX, centerY, batteryGauge, packVoltage, voltageColor, splitFooter)
+local function drawGaugeLabel(cx, cy, text, deg, radius, mainLeft, mainW, topY, cutY, weight)
+    local lx, ly = polarPoint(cx, cy, deg, radius)
+    local tw, th = getTextW(text) or 0, getTextH(text)
+    local tx = clamp(lx - math.floor(tw / 2), mainLeft + 3, mainLeft + mainW - tw - 3)
+    local ty = clamp(ly - math.floor(th / 2), topY + 2, cutY - th - 2)
+    drawHeavyText(tx, ty, text, weight)
+end
+local function drawFooterCurrent(w, c, scale, left, right, y, height, centerX)
+    if not sourcePresent(w.currentSource) or right <= left then return end
+    local maxW = right - left
+    if centerX then
+        maxW = math.min(maxW, math.max(1,
+            math.floor(math.min(centerX - left, right - centerX) * 2 + 1)))
+    end
+    local text = formatAmps(filteredValue(w, "current", getVal(w.currentSource), 0.3))
+    setFittingFont("small", text, maxW, height)
+    text = fitText(text, maxW)
+    local tw, th = getTextW(text) or 0, getTextH(text)
+    local textX = left + math.floor((right - left - tw) / 2)
+    if centerX then textX = clamp(centerX - math.floor(tw / 2), left, right - tw) end
+    lcd.color(c.muted)
+    drawText(textX, y + math.max(0, math.floor((height - th) / 2)), text)
+end
+local function drawFuelGauge(w, c, scale, mainLeft, mainW, topY, bottomY, fuelValue, sizeScale, centerX, centerY, batteryGauge, packVoltage, voltageColor, splitFooter, lowGood, gaugeMid, gaugeHigh, footerText, leftText, midText, rightText, halfGauge)
     local pct = clamp(tonumber(fuelValue) or 0, 0, 100)
+    local verticalSide = halfGauge == "left" or halfGauge == "right"
+    local largeFooter = currentTextScale >= TEXT_SCALE_LARGE
     local cx = centerX or (mainLeft + math.floor(mainW / 2))
-    local showPercent = batteryGauge or (w.fuelShowPercent or 1) ~= 2
-    local percentReserve = showPercent and px(36, scale, 22, 44) or px(8, scale, 4, 12)
+    local showPercent = footerText ~= nil or batteryGauge or (w.fuelShowPercent or 1) ~= 2
+    local showCurrent = not verticalSide and sourcePresent(w.currentSource)
+    local footerSpan = math.max(1, bottomY - topY)
+    local gaugeFooter = math.min(math.max(1, footerSpan - 1), gaugeFooterHeight())
+    local percentReserve = showPercent and gaugeFooter
+        or (showCurrent and px(34, scale, 24, 40) or px(8, scale, 4, 12))
     local gaugeBottom = math.max(topY + 1, bottomY - percentReserve)
     local areaH = math.max(1, gaugeBottom - topY)
-    local cy = centerY or (topY + math.floor(areaH * 0.74))
-    local r = math.floor(math.min(mainW * 0.49, areaH * 0.74, px(215, scale, 132, 245)) * (sizeScale or 1))
+    if verticalSide then
+        cx = halfGauge == "left" and (mainLeft + mainW) or mainLeft
+    end
+    local cy = verticalSide and gaugeBottom or (centerY or (topY + math.floor(areaH * 0.74)))
+    local hScale = verticalSide and 0.96 or 0.74
+    local wScale = verticalSide and 0.96 or 0.49
+    local cap = verticalSide and math.max(mainW, areaH) or px(215, scale, 132, 245)
+    local r = math.floor(math.min(mainW * wScale, areaH * hScale, cap) * (sizeScale or 1))
+    r = math.min(r, math.floor(areaH * (verticalSide and 0.98 or 0.76)))
+    if verticalSide then
+        r = math.min(r, math.max(1, mainW - 1), math.max(1, areaH - 1))
+    end
     if r < px(38, scale, 24, 50) then
-        setFontSize("large", scale)
         lcd.color(c.text)
         local footerY = topY + math.floor(areaH / 2)
-        local fallback = showPercent and (tostring(math.floor(pct + 0.5)) .. "%") or "FUEL"
+        local fallback = showPercent and (tostring(math.floor(pct + 0.5)) .. "%")
+            or (showCurrent and formatAmps(filteredValue(w, "current", getVal(w.currentSource), 0.3)) or T(w, "Fuel"):upper())
+        setFittingFont("large", fallback, mainW, percentReserve)
         if splitFooter and packVoltage then
             local voltageText = string.format("%.2fV", packVoltage)
+            local voltageX = mainLeft
+            local fallbackW = getTextW(fallback) or 0
+            local fallbackX = mainLeft + mainW - fallbackW
+            local footerTextH = getTextH(fallback)
             lcd.color(voltageColor or c.text)
-            lcd.drawText(mainLeft, footerY, voltageText)
-            lcd.drawText(mainLeft + mainW - (getTextW(fallback) or 0), footerY, fallback)
+            drawText(voltageX, footerY, voltageText)
+            drawText(fallbackX, footerY, fallback)
+            if not verticalSide then
+                drawFooterCurrent(w, c, scale, voltageX + (getTextW(voltageText) or 0),
+                    fallbackX, footerY, footerTextH, cx)
+            end
         else
-            lcd.drawText(mainLeft + math.floor((mainW - (getTextW(fallback) or 0)) / 2), footerY, fallback)
+            drawText(mainLeft + math.floor((mainW - (getTextW(fallback) or 0)) / 2), footerY, fallback)
             if batteryGauge and packVoltage then
                 local voltageText = string.format("%.2fV", packVoltage)
                 lcd.color(voltageColor or c.text)
-                lcd.drawText(mainLeft + math.floor((mainW - (getTextW(voltageText) or 0)) / 2), footerY + px(42, scale, 28, 50), voltageText)
+                drawText(mainLeft + math.floor((mainW - (getTextW(voltageText) or 0)) / 2), footerY + px(42, scale, 28, 50), voltageText)
             end
         end
-        return false
+        return
     end
-    local cutDepth = math.floor(r * 0.3)
+    local cutDepth = verticalSide and 0 or math.floor(r * 0.3)
     cy = math.min(cy, gaugeBottom - cutDepth)
     local cutY = cy + cutDepth
+    if type(lcd.setClipping) == "function" then
+        lcd.setClipping(mainLeft, topY, mainW, math.max(1, cutY - topY))
+    end
     local face = lcd.RGB(0, 0, 0)
     local rim = lcd.RGB(235, 240, 240)
     local red = lcd.RGB(255, 35, 25)
     local gaugeText = lcd.RGB(255, 255, 255)
-    local fuelHigh = batteryGauge and (w.field4High or 80) or (w.fuelHigh or 40)
-    local fuelMid = batteryGauge and (w.field4Mid or 30) or (w.fuelMid or 20)
+    local fuelHigh = gaugeHigh or (batteryGauge and (w.field4High or 80) or (w.fuelHigh or 40))
+    local fuelMid = gaugeMid or (batteryGauge and (w.field4Mid or 30) or (w.fuelMid or 20))
     if fuelHigh < fuelMid then
         fuelHigh, fuelMid = fuelMid, fuelHigh
     end
     lcd.color(face)
-    if lcd.drawFilledCircle then
-        lcd.drawFilledCircle(cx, cy, r)
-    else
-        for y = -r, r, 6 do
-            local half = math.floor(math.sqrt(math.max(0, r * r - y * y)))
-            lcd.drawFilledRectangle(cx - half, cy + y, half * 2 + 1, 6)
-        end
-    end
-    local rimWeight = px(3, scale, 2, 4)
+    lcd.drawFilledCircle(cx, cy, r)
     local innerRim = r - px(6, scale, 3, 9)
     lcd.color(rim)
-    if lcd.drawCircle then
-        for o = 0, rimWeight - 1 do
-            lcd.drawCircle(cx, cy, r - o)
-            lcd.drawCircle(cx, cy, innerRim - o)
-        end
-    else
-        drawHeavyLine(cx - r, cy, cx, cy - r, rimWeight)
-        drawHeavyLine(cx, cy - r, cx + r, cy, rimWeight)
+    lcd.drawCircle(cx, cy, r)
+    lcd.drawCircle(cx, cy, innerRim)
+    local startDeg, sweepDeg = 180, 180
+    if halfGauge == "left" then
+        startDeg, sweepDeg = 180, 90
+    elseif halfGauge == "right" then
+        startDeg, sweepDeg = 360, -90
     end
-    for i = 0, 8 do
-        local deg = 180 + i * 22.5
-        local major = i == 0 or i == 4 or i == 8
+    for i = 0, 4 do
+        local deg = startDeg + i * (sweepDeg / 4)
+        local major = i == 0 or i == 2 or i == 4
         local x1, y1 = polarPoint(cx, cy, deg, r - px(major and 10 or 8, scale, 5, 14))
         local x2, y2 = polarPoint(cx, cy, deg, r - px(major and 34 or 24, scale, 14, 40))
-        local tickPct = i * 12.5
-        lcd.color(tickPct < fuelMid and c.bad or (tickPct < fuelHigh and c.warn or c.good))
-        drawHeavyLine(x1, y1, x2, y2, major and px(3, scale, 2, 4) or px(2, scale, 1, 3))
+        local tickPct = i * 25
+        lcd.color(gaugeColor(c, tickPct, lowGood, fuelMid, fuelHigh))
+        drawHeavyLine(x1, y1, x2, y2)
     end
-    setFontSize("small", scale)
+    setFontSize("small")
     lcd.color(gaugeText)
-    local labelWeight = px(3, scale, 2, 3)
-    local labelY = px(11, scale, 7, 15)
-    local lx, ly = polarPoint(cx, cy, 180, r - px(46, scale, 28, 60))
-    drawHeavyText(lx - math.floor((getTextW("E") or 0) / 2), ly - labelY, "E", labelWeight)
-    lx, ly = polarPoint(cx, cy, 270, r - px(62, scale, 36, 74))
-    drawHeavyText(lx - math.floor((getTextW("1/2") or 0) / 2), ly - labelY, "1/2", labelWeight)
-    lx, ly = polarPoint(cx, cy, 360, r - px(46, scale, 28, 60))
-    drawHeavyText(lx - math.floor((getTextW("F") or 0) / 2), ly - labelY, "F", labelWeight)
-    local needleDeg = 180 + pct * 1.8
-    local nx, ny = polarPoint(cx, cy, needleDeg, math.floor(r * 0.78))
-    lcd.color(red)
-    drawHeavyLine(cx, cy, nx, ny, px(4, scale, 3, 5))
-    if lcd.drawFilledCircle then
-        lcd.drawFilledCircle(cx, cy, px(11, scale, 7, 15))
-        lcd.color(face)
-        lcd.drawFilledCircle(cx, cy, px(5, scale, 3, 8))
+    local labelWeight = preset(1, 2, 3)
+    leftText = leftText or "E"
+    midText = midText or "1/2"
+    rightText = rightText or "F"
+    if verticalSide then
+        local labelR = r - px(48, scale, 30, 62)
+        drawGaugeLabel(cx, cy, leftText, startDeg, labelR, mainLeft, mainW, topY, cutY, labelWeight)
+        drawGaugeLabel(cx, cy, midText, startDeg + sweepDeg / 2, labelR, mainLeft, mainW, topY, cutY, labelWeight)
+        drawGaugeLabel(cx, cy, rightText, startDeg + sweepDeg, labelR, mainLeft, mainW, topY, cutY, labelWeight)
     else
-        lcd.drawFilledRectangle(cx - px(5, scale, 3, 8), cy - px(5, scale, 3, 8), px(10, scale, 6, 16), px(10, scale, 6, 16))
+        drawGaugeLabel(cx, cy, leftText, 180, r - px(56, scale, 34, 68), mainLeft, mainW, topY, cutY, labelWeight)
+        drawGaugeLabel(cx, cy, midText, 270, r - px(70, scale, 44, 82), mainLeft, mainW, topY, cutY, labelWeight)
+        drawGaugeLabel(cx, cy, rightText, 360, r - px(56, scale, 34, 68), mainLeft, mainW, topY, cutY, labelWeight)
     end
-    lcd.color(c.bg)
-    lcd.drawFilledRectangle(cx - r - px(6, scale, 3, 10), cutY, r * 2 + px(12, scale, 6, 20), r)
+    local needleDeg = startDeg + pct * sweepDeg / 100
+    local nx, ny = polarPoint(cx, cy, needleDeg, math.floor(r * 0.86))
+    local needleLift = px(4, scale, 3, 6)
+    local hubY = cy - needleLift
+    ny = ny - needleLift
+    lcd.color(red)
+    drawHeavyLine(cx, hubY, nx, ny)
+    lcd.drawFilledCircle(cx, hubY, px(9, scale, 6, 12))
+    lcd.color(face)
+    lcd.drawFilledCircle(cx, hubY, px(4, scale, 2, 6))
+    if type(lcd.setClipping) == "function" then
+        lcd.setClipping()
+    end
     lcd.color(rim)
-    lcd.drawLine(cx - r + px(10, scale, 5, 16), cutY, cx + r - px(10, scale, 5, 16), cutY)
+    if verticalSide then
+        local seamX = halfGauge == "left" and (mainLeft + mainW - 1) or mainLeft
+        drawHeavyLine(seamX, math.max(topY, cy - r + px(8, scale, 4, 12)), seamX, cutY)
+        if halfGauge == "left" then
+            drawHeavyLine(math.max(mainLeft, cx - r), cutY, seamX, cutY)
+        else
+            drawHeavyLine(seamX, cutY, math.min(mainLeft + mainW - 1, cx + r), cutY)
+        end
+    else
+        lcd.drawLine(cx - r + px(10, scale, 5, 16), cutY, cx + r - px(10, scale, 5, 16), cutY)
+    end
     if showPercent then
-        local percentText = splitFooter and (tostring(math.floor(pct + 0.5)) .. "%")
+        local percentText = footerText or (splitFooter and (tostring(math.floor(pct + 0.5)) .. "%")
             or (T(w, batteryGauge and "Batt" or "Dash Fuel"):upper() .. " " .. tostring(math.floor(pct + 0.5)) .. "%")
-        setFontSize("large", scale)
-        local percentColor = pct < fuelMid and c.bad or (pct < fuelHigh and c.warn or c.good)
+        )
+        local footerMaxH = math.max(12, percentReserve - 1)
+        local footerOverhang = px(5, scale, 3, 7)
+        local footerMaxW = verticalSide and math.min(mainW, r + footerOverhang * 2) or mainW
+        if not (splitFooter and packVoltage) then
+            if verticalSide and pairedFooterFont then
+                setExactFont(pairedFooterFont)
+            else
+                setFittingFont("huge", percentText, footerMaxW, footerMaxH)
+            end
+        end
+        local percentColor = gaugeColor(c, pct, lowGood, fuelMid, fuelHigh)
         lcd.color(percentColor)
-        local percentY = cutY + px(5, scale, 3, 8)
         if splitFooter and packVoltage then
             local voltageText = string.format("%.2fV", packVoltage)
-            setFontSize("huge", scale)
             local inset = px(12, scale, 6, 18)
-            local voltageX = math.max(mainLeft, cx - r + inset)
+            if verticalSide and pairedFooterFont then
+                setExactFont(pairedFooterFont)
+            else
+                setFittingFont("huge",
+                    voltageText .. percentText,
+                    largeFooter and math.max(1, mainW - 2) or (mainW - inset * 2),
+                    footerMaxH)
+            end
+            local voltageW = getTextW(voltageText) or 0
             local percentW = getTextW(percentText) or 0
-            local percentX = math.min(mainLeft + mainW - percentW, cx + r - inset - percentW)
+            local footerTextH = getTextH(percentText)
+            local percentY = math.max(cutY,
+                bottomY - footerTextH - px(6, scale, 4, 8))
+            local voltageX, percentX
+            if largeFooter then
+                local edgeInset = px(5, scale, 3, 6)
+                voltageX = mainLeft + edgeInset
+                percentX = mainLeft + mainW - percentW - edgeInset
+            else
+                voltageX = verticalSide and (mainLeft + px(5, scale, 3, 8)) or (mainLeft + inset)
+                percentX = verticalSide and (mainLeft + mainW - percentW - px(5, scale, 3, 8))
+                    or (mainLeft + mainW - inset - percentW)
+            end
             lcd.color(voltageColor or percentColor)
             drawHeavyText(voltageX, percentY, voltageText, labelWeight)
             lcd.color(percentColor)
             drawHeavyText(percentX, percentY, percentText, labelWeight)
+            if not verticalSide then
+                local gap = px(5, scale, 3, 8)
+                drawFooterCurrent(w, c, scale, voltageX + voltageW + gap,
+                    percentX - gap, percentY, footerTextH, cx)
+            end
         else
-            drawHeavyText(cx - math.floor((getTextW(percentText) or 0) / 2), percentY, percentText, labelWeight)
+            local footerTextH = getTextH(percentText)
+            local percentY = math.max(cutY,
+                bottomY - footerTextH - px(6, scale, 4, 8))
+            if verticalSide then
+                local textW = getTextW(percentText) or 0
+                local footerCenter = halfGauge == "left" and (cx - math.floor(r / 2))
+                    or (mainLeft + math.floor(mainW / 2))
+                local textX = clamp(footerCenter - math.floor(textW / 2),
+                    mainLeft - footerOverhang, mainLeft + mainW - textW + footerOverhang)
+                drawHeavyText(textX, percentY, percentText, labelWeight)
+            else
+                drawHeavyText(cx - math.floor((getTextW(percentText) or 0) / 2), percentY, percentText, labelWeight)
+            end
             if batteryGauge and packVoltage then
                 local voltageText = string.format("%.2fV", packVoltage)
-                setFontSize("huge", scale)
+                setFittingFont("huge", voltageText, mainW, footerMaxH)
                 lcd.color(voltageColor or percentColor)
                 local voltageY = percentY + px(42, scale, 28, 50)
                 drawHeavyText(cx - math.floor((getTextW(voltageText) or 0) / 2), voltageY, voltageText, labelWeight)
             end
         end
+    elseif showCurrent then
+        drawFooterCurrent(w, c, scale, mainLeft + 1, mainLeft + mainW - 1,
+            bottomY - percentReserve, percentReserve, cx)
     end
-    return true
 end
-local function drawInFlightStat(w, c, scale, x, y, width, src, fallback, key, rowH)
-    if not src then
-        return y
+local function drawCardInline(c, scale, x, y, width, height, pad, label, value, color)
+    local weight = currentFontSetting == 3 and 1 or 0
+    setFittingFont("small", tostring(value or ""), width - pad * 2 - weight,
+        math.max(1, height))
+    lcd.color(color or c.text)
+    value = fitText(value, width - pad * 2)
+    local valueW = getTextW(value) or 0
+    local textY = y + math.max(1, math.floor((height - getTextH(value)) / 2))
+    drawText(x + pad, textY, fitText(label or "", math.max(0, width - pad * 3 - valueW)))
+    if weight > 0 then drawHeavyText(x + width - pad - valueW - weight, textY, value, weight)
+    else drawText(x + width - pad - valueW, textY, value) end
+end
+
+local function drawCardV2(c, scale, x, y, width, height, label, value, color)
+    if height <= 0 or width <= 0 then return end
+    local pad = px(8, scale, 4, 12)
+    roundPanel(x, y, width, height, c.panel, c.outline)
+    drawCardInline(c, scale, x, y, width, height, pad, label, value or "--", color)
+end
+
+local function drawCenteredText(text, x, width, y, color, weight)
+    weight = weight or 0
+    local extent = weight
+    text = fitText(text, math.max(0, width - extent))
+    lcd.color(color)
+    local textX = x + math.floor((width - (getTextW(text) or 0) - extent) / 2)
+    if weight > 0 then
+        drawHeavyText(textX, y, text, weight)
+    else
+        drawText(textX, y, text)
     end
-    rowH = rowH or px(108, scale, 82, 126)
-    local padX = px(18, scale, 12, 24)
-    local compact = rowH < px(48, scale, 42, 52)
-    local padY = compact and px(3, scale, 2, 5) or px(12, scale, 8, 16)
-    local valueY = compact and px(20, scale, 18, 24) or px(34, scale, 22, 40)
-    local v = getVal(src)
-    if not key then
-        key = statKeyForSource(w, src)
-    end
-    local col = c.neutral
-    if key then
-        col = score(w, key, v, c)
-    end
-    local innerW = width - padX * 2
-    setFontSize("small", scale)
-    local label = fitText(sourceName(src, fallback), innerW)
+end
+
+local function drawTimerCardV2(w, c, scale, x, y, width, height, label)
+    if height <= 0 or width <= 0 then return end
+    local pad = px(8, scale, 4, 12)
+    roundPanel(x, y, width, height, c.panel, c.outline)
+    local value = timerText(w)
+    local labelText = label or T(w, "Timer")
+    local weight = px(2, scale, 1, 3)
+    setFontSize("small")
+    local minLabelW = math.min(getTextW(labelText) or 0, math.floor(width * 0.45))
+    local valueMaxW = math.max(1, width - pad * 3 - minLabelW)
+    local valueMaxH = math.max(1, height - 2 - weight * 2)
+    setFittingFont("huge", value, math.max(1, valueMaxW - weight), valueMaxH)
+    local valueFont = currentFont
+    local valueW = getTextW(value) or 0
+    setFontSize("small")
     lcd.color(c.muted)
-    lcd.drawText(x + padX, y + padY, label)
-    lcd.color(col)
-    setFontSize(compact and "small" or "medium", scale)
-    local txt = formatValue(v)
-    if key == "field4" then
-        txt = txt .. "%"
-    end
-    lcd.drawText(x + width - padX - (getTextW(txt) or 0), y + padY + valueY, txt)
-    return y + rowH
+    local labelW = math.max(0, width - pad * 3 - valueW)
+    drawText(x + pad, y + math.max(1, math.floor((height - getTextH(labelText)) / 2)), fitText(labelText, labelW))
+    setExactFont(valueFont)
+    valueW = getTextW(value) or 0
+    local valueX = math.min(x + width - pad - valueW - weight, x + width - valueW - weight)
+    local valueY = y + math.max(1 + weight, math.floor((height - getTextH(value)) / 2))
+    lcd.color(c.text)
+    drawHeavyText(valueX, valueY, value, weight)
 end
-local function drawInFlight(w, c, scale, scrW, scrH)
-    local batt = getVal(w.batterySource)
-    local fuelMode = (w.powerSourceType or 1) == 2
-    local batteryGauge = not fuelMode and tonumber(w.batteryStyle) == 2
-    local gaugeMode = fuelMode or batteryGauge
-    if fuelMode then
-        batt = batteryFuelPercent(w, batt) or batt
+
+local function imageWithinLimit(path)
+    if not os or type(os.stat) ~= "function" then return true end
+    local ok, stat = pcall(os.stat, path)
+    if not ok or type(stat) ~= "table" then return true end
+    local size = stat.size or stat.length or stat.fileSize or stat.filesize
+    return type(size) ~= "number" or size <= MAX_MODEL_IMAGE_BYTES
+end
+
+local function bitmapMemoryAvailable()
+    local fn = system and system.getMemoryUsage
+    if type(fn) ~= "function" then return true end
+    local ok, memory = pcall(fn)
+    if not ok or type(memory) ~= "table" then return true end
+    local free = tonumber(memory.luaBitmapsRamAvailable)
+    return not free or free >= MIN_MODEL_IMAGE_RAM
+end
+
+local function bitmapDimensionsWithinLimit(bitmap)
+    if not bitmap then return false end
+    local function dimension(name)
+        local fn = safeMember(bitmap, name)
+        if type(fn) ~= "function" then return nil end
+        local ok, value = pcall(fn, bitmap)
+        return ok and tonumber(value) or nil
     end
-    local perCell = 0
-    local ratio = 0
-    local battCol = c.bad
-    if not fuelMode then
-        local cells = cellsFor(w, batt)
-        if batt > 0 and cells > 0 then
-            perCell = batt / cells
+    local width, height = dimension("width"), dimension("height")
+    return (not width or width <= MAX_MODEL_IMAGE_WIDTH)
+        and (not height or height <= MAX_MODEL_IMAGE_HEIGHT)
+end
+
+local function modelBitmap(w)
+    if w.imageFile and w.imageFile ~= "" then
+        if w.selectedFile ~= w.imageFile then
+            w.selectedBmp, w.selectedFile = nil, w.imageFile
+            if lcd.loadBitmap and imageWithinLimit(w.imageFile) and bitmapMemoryAvailable() then
+                local ok, loaded = pcall(lcd.loadBitmap, w.imageFile)
+                if ok and bitmapDimensionsWithinLimit(loaded) then w.selectedBmp = loaded end
+            end
         end
-        ratio = batteryIconRatio(w, perCell, batt)
-        if perCell >= (w.battHigh or 4.15) then
-            battCol = c.good
-        elseif perCell >= (w.battMid or 3.75) then
-            battCol = c.warn
+        return w.selectedBmp
+    else
+        if w.selectedBmp then
+            w.selectedBmp, w.selectedFile = nil, nil
+        end
+        if not defaultIconAttempted and lcd.loadBitmap then
+            defaultIconAttempted = true
+            local ok, loaded = pcall(lcd.loadBitmap, "SCRIPTS:/MultiDash/MultiDash.png")
+            if ok then defaultIconBmp = loaded end
+        end
+        return defaultIconBmp
+    end
+end
+
+local function drawTopStatusStripV2(w, c, scale, x, y, width, height, armed)
+    if height <= 0 then return end
+    roundPanel(x, y, width, height, c.panel, c.outline)
+    local pad = px(5, scale, 3, 8)
+    local imgPad = px(1, scale, 1, 2)
+    local imgW = math.min(height - imgPad * 2, px(87, scale, 42, 90), math.floor(width * 0.28))
+    drawBitmapBox(x + imgPad, y + imgPad, imgW, height - imgPad * 2, modelBitmap(w))
+    setFontSize("small")
+    local armedText = T(w, "ARMED")
+    local pillPad = px(16, scale, 10, 22)
+    local pillW = clamp((getTextW(armedText) or 0) + pillPad * 2, px(70, scale, 58, 86), math.floor(width * 0.38))
+    local textX = x + imgPad + imgW + px(8, scale, 4, 12)
+    local textW = math.max(0, width - (textX - x) - pad * 2 - pillW)
+    if sourcePresent(w.statusSource) and textW > 0 then
+        drawStatusBar(w, c, scale, textX, y + imgPad, textW, height - imgPad * 2)
+    end
+    if armed then
+        setFittingFont("small", armedText, pillW - px(8, scale, 4, 10), height - 4)
+        local pillH = clamp(getTextH(armedText) + px(8, scale, 5, 10), px(20, scale, 17, 24), height - 4)
+        local pillX = x + width - pad - pillW
+        local pillY = y + math.floor((height - pillH) / 2)
+        roundPanel(pillX, pillY, pillW, pillH, c.warn, c.outline)
+        local txt = fitText(armedText, pillW - px(8, scale, 4, 10))
+        lcd.color(lcd.RGB(0, 0, 0))
+        drawText(pillX + math.floor((pillW - (getTextW(txt) or 0)) / 2),
+            pillY + math.max(1, math.floor((pillH - getTextH(txt)) / 2)), txt)
+    end
+end
+
+local function drawLinkCardV2(w, c, scale, x, y, width, height)
+    local raw = getVal(w.rssiSource)
+    local link = wholeNumber(filteredValue(w, "link", raw, 0.35))
+    local unit = sourceUnit(w.rssiSource)
+    local linkName = string.lower(sourceName(w.rssiSource, ""))
+    local percentUnit = unit == "%" or unit:lower():find("percent", 1, true) ~= nil
+        or (unit == "" and (linkName:find("lq", 1, true)
+            or linkName:find("rqly", 1, true) or linkName:find("quality", 1, true)
+            or linkName:find("vfr", 1, true)))
+    local col = w.rssiSource and score(w, "link", link, c) or c.neutral
+    roundPanel(x, y, width, height, c.panel, c.outline)
+    local savedScale = currentTextScale
+    local pad = px(8, scale, 4, 12)
+    local innerX, innerY = x + 2, y + 2
+    local innerW, innerH = math.max(1, width - 4), math.max(1, height - 4)
+    roundPanel(innerX, innerY, innerW, innerH, col)
+    setFontSize("small")
+    local label = sourceName(w.rssiSource, T(w, "Link"))
+    local suffix = percentUnit and "%" or unit
+    local txt = w.rssiSource and (tostring(percentUnit and clamp(link, 0, 100) or link) .. suffix) or "--"
+    local minText = T(w, "Min") .. ": " .. (w.linkMin ~= nil and (tostring(wholeNumber(w.linkMin)) .. suffix) or "--")
+    local maxH = math.max(1, height - 4)
+    local usableX, usableW = x + pad, math.max(1, width - pad * 2)
+    local sideW = math.floor(usableW * 0.30)
+    local minW = math.max(1, usableW - sideW * 2)
+    local linkWeight = savedScale >= TEXT_SCALE_LARGE and 1 or 0
+    local linkExtent = linkWeight
+    setFittingFont("large", txt, math.max(1, sideW - linkExtent), maxH)
+    local textY = y + math.max(1, math.floor((height - getTextH(txt)) / 2))
+    drawCenteredText(label, usableX, sideW, textY, c.muted, linkWeight)
+    drawCenteredText(minText, usableX + sideW, minW, textY, lcd.RGB(255, 255, 255), linkWeight)
+    drawCenteredText(txt, usableX + sideW + minW, sideW, textY, lcd.RGB(0, 0, 0), linkWeight)
+end
+
+local function drawBatteryTowerV2(w, c, scale, x, y, width, height, info)
+    local pad = px(12, scale, 6, 18)
+    local largeFooter = currentTextScale >= TEXT_SCALE_LARGE
+    local footerH = math.min(math.max(1, height - 1), gaugeFooterHeight())
+    local bodyH = math.max(1, height - footerH - pad * 2)
+    local capW = px(11, scale, 7, 16)
+    local capGap = px(3, scale, 2, 5)
+    local batteryW = math.max(1, width - pad * 2 - capW - capGap)
+    local batteryH = math.max(1, math.min(math.floor(bodyH * 0.94), math.floor(batteryW * 0.38)))
+    local bx = x + pad
+    local by = y + pad + math.floor((bodyH - batteryH) / 2)
+    local segments = 8
+    local gap = px(3, scale, 1, 5)
+    local innerX, innerY = bx + 4, by + 4
+    local innerW, innerH = math.max(1, batteryW - 8), math.max(1, batteryH - 8)
+    local segW = math.floor((innerW - (segments - 1) * gap) / segments)
+    local slices = batteryIconSlicesFor(info.ratio, segments)
+    roundPanel(bx, by, batteryW, batteryH, c.bg, c.outline)
+    for i = 1, segments do
+        local filled = i <= slices
+        lcd.color(filled and info.color or c.batteryEmpty)
+        lcd.drawFilledRectangle(innerX + (i - 1) * (segW + gap), innerY, segW, innerH)
+    end
+    lcd.color(c.outline)
+    lcd.drawFilledRectangle(bx + batteryW + capGap, by + math.floor(batteryH * 0.28), capW, math.floor(batteryH * 0.44))
+    local vText = string.format("%.2fV", info.raw)
+    local pText = info.needsCells and T(w, "SET CELLS")
+        or (info.percent ~= nil and string.format("%d%%", math.floor(info.percent + 0.5)) or "--")
+    if largeFooter then
+        setFittingFont("huge", vText .. pText, width - pad * 2,
+            math.max(1, footerH - px(2, scale, 1, 3)))
+    else
+        setFittingFont("large", vText .. pText, width - pad * 2,
+            math.max(1, footerH - px(4, scale, 2, 6)))
+    end
+    local vW, pW = getTextW(vText) or 0, getTextW(pText) or 0
+    local footerTextH = getTextH(vText)
+    local footerY = largeFooter and (y + height - footerTextH - px(6, scale, 4, 8))
+        or (y + height - footerH + px(4, scale, 2, 8))
+    local weight = currentFontSetting == 3 and 2 or 0
+    local vX, pX = x + pad, x + width - pad - pW - weight
+    lcd.color(info.color)
+    if weight > 0 then
+        drawHeavyText(vX, footerY, vText, weight)
+        drawHeavyText(pX, footerY, pText, weight)
+    else
+        drawText(vX, footerY, vText)
+        drawText(pX, footerY, pText)
+    end
+    gap = px(5, scale, 3, 8)
+    drawFooterCurrent(w, c, scale, vX + vW + gap, pX - gap, footerY, footerTextH,
+        x + math.floor(width / 2))
+end
+
+local function drawMiniBattery(c, scale, x, y, width, height, info)
+    local capW = clamp(math.floor(height * 0.18), px(5, scale, 3, 7), px(15, scale, 9, 18))
+    local capGap = clamp(math.floor(height * 0.05), 1, px(4, scale, 2, 6))
+    local bodyW = math.max(1, width - capW - capGap)
+    roundPanel(x, y, bodyW, height, c.bg, c.outline)
+    local inset = clamp(math.floor(height * 0.12), px(3, scale, 2, 4), px(7, scale, 5, 9))
+    local gap = clamp(math.floor(height * 0.06), 1, px(5, scale, 3, 6))
+    local segments = 8
+    local innerW = math.max(1, bodyW - inset * 2)
+    local segmentW = math.max(1, math.floor((innerW - gap * (segments - 1)) / segments))
+    local slices = batteryIconSlicesFor(info.ratio, segments)
+    for i = 1, segments do
+        lcd.color(i <= slices and info.color or c.batteryEmpty)
+        lcd.drawFilledRectangle(x + inset + (i - 1) * (segmentW + gap), y + inset,
+            segmentW, math.max(1, height - inset * 2))
+    end
+    lcd.color(c.outline)
+    lcd.drawFilledRectangle(x + bodyW + capGap, y + math.floor(height * 0.28),
+        capW, math.max(1, math.floor(height * 0.44)))
+end
+
+local function drawDualFooterValue(scale, x, y, width, height, value, detail, color)
+    local pad = px(4, scale, 2, 6)
+    local gap = px(2, scale, 1, 3)
+    local weight = preset(0, 1, 2)
+    setFittingFont("small", detail, width - pad * 2, math.floor(height * 0.38))
+    detail = fitText(detail, width - pad * 2)
+    local detailFont = currentFont
+    local detailH = getTextH(detail)
+    local valueH = math.max(1, height - pad * 2 - gap - detailH)
+    setFittingFont("huge", value, width - pad * 2 - weight, valueH)
+    local valueTextH = getTextH(value)
+    local top = y + math.max(pad, math.floor((height - valueTextH - gap - detailH) / 2))
+    drawCenteredText(value, x + pad, width - pad * 2, top, color, weight)
+    setExactFont(detailFont)
+    drawCenteredText(detail, x + pad, width - pad * 2, top + valueTextH + gap, color, weight)
+end
+
+local function drawDualBatteryCockpitV2(w, c, scale, x, y, width, height)
+    local info = dualPowerInfo(w, c)
+    roundPanel(x, y, width, height, c.panel, c.outline)
+    local pad = px(6, scale, 3, 9)
+    local gap = px(8, scale, 4, 12)
+    local contentY = y + pad
+    local contentH = math.max(1, y + height - pad - contentY)
+    local contentX, contentW = x + pad, width - pad * 2
+
+    local footerH = math.min(math.max(1, contentH - 1), gaugeFooterHeight() + 18)
+    local footerY = contentY + contentH - footerH
+    local gaugeW = math.floor(contentW / 2)
+    local secondW = contentW - gaugeW
+    local gaugeBoxH = math.max(1, footerY - gap - contentY)
+    roundPanel(contentX, contentY, contentW, gaugeBoxH, c.panelAlt, c.outline)
+    lcd.color(c.outline)
+    lcd.drawFilledRectangle(contentX + gaugeW, contentY + 1, 1, math.max(1, gaugeBoxH - 2))
+    local labelY = contentY + pad
+    setFontSize("small")
+    local labelH = getTextH("BATTERY 1")
+    drawCenteredText(T(w, "Battery 1"):upper(), contentX + pad, gaugeW - pad * 2,
+        labelY, c.muted, px(1, scale, 1, 2))
+    drawCenteredText(T(w, "Battery 2"):upper(), contentX + gaugeW + pad,
+        secondW - pad * 2, labelY, c.muted, px(1, scale, 1, 2))
+
+    local gaugeTop = labelY + labelH + px(3, scale, 2, 5)
+    local gaugeBottom = contentY + gaugeBoxH - pad
+    local gaugeAreaH = math.max(1, gaugeBottom - gaugeTop)
+    local availableW = math.min(gaugeW, secondW) - pad * 2
+    local iconH = math.max(px(20, scale, 17, 26),
+        math.min(math.floor(gaugeAreaH * 0.98), math.floor(availableW * 0.47)))
+    iconH = math.min(iconH, gaugeAreaH)
+    local iconW = math.min(availableW, math.floor(iconH * 3.7))
+    local iconY = gaugeTop + math.max(0, math.floor((gaugeAreaH - iconH) / 2))
+    drawMiniBattery(c, scale, contentX + math.floor((gaugeW - iconW) / 2),
+        iconY, iconW, iconH, info[1])
+    drawMiniBattery(c, scale, contentX + gaugeW + math.floor((secondW - iconW) / 2),
+        iconY, iconW, iconH, info[2])
+
+    local centerW = math.floor(contentW * 0.34)
+    local sideW = math.floor((contentW - centerW) / 2)
+    local rightW = contentW - centerW - sideW
+    local compactFooter = sideW < 115
+    roundPanel(contentX, footerY, contentW, footerH, c.bg, c.outline)
+    lcd.color(c.outline)
+    lcd.drawFilledRectangle(contentX + sideW, footerY + 1, 1, math.max(1, footerH - 2))
+    lcd.drawFilledRectangle(contentX + sideW + centerW, footerY + 1, 1, math.max(1, footerH - 2))
+    lcd.color(info.color)
+    lcd.drawFilledRectangle(contentX + sideW + 1, footerY + 1,
+        math.max(1, centerW - 1), px(3, scale, 2, 4))
+
+    local firstValue = info[1].online and string.format("%.2fV", info[1].raw) or "--"
+    local firstDetail = info[1].needsCells and T(w, "SET CELLS") or (info[1].online
+        and string.format(compactFooter and "%.2f/C %d%%" or "%.2fV/C %d%%",
+            info[1].perCell, math.floor(info[1].percent + 0.5))
+        or T(w, "NO SENSOR"))
+    local secondValue = info[2].online and string.format("%.2fV", info[2].raw) or "--"
+    local secondDetail = info[2].needsCells and T(w, "SET CELLS") or (info[2].online
+        and string.format(compactFooter and "%.2f/C %d%%" or "%.2fV/C %d%%",
+            info[2].perCell, math.floor(info[2].percent + 0.5))
+        or T(w, "NO SENSOR"))
+    local totalValue = info.total and string.format("%.2fV", info.total) or "--"
+    local totalDetail = info.total
+        and (compactFooter and (tostring(info.cells) .. "S " .. T(w, "Series"):upper())
+            or (tostring(info.cells) .. "S " .. string.format("%.2fV/C ", info.deltaPerCell or 0)
+                .. T(w, "Diff"):upper()))
+        or T(w, "WAITING")
+    drawDualFooterValue(scale, contentX, footerY, sideW, footerH,
+        firstValue, firstDetail, info[1].online and info[1].color or c.bad)
+    drawDualFooterValue(scale, contentX + sideW, footerY, centerW, footerH,
+        totalValue, totalDetail, info.total and info.color or c.bad)
+    drawDualFooterValue(scale, contentX + sideW + centerW, footerY, rightW, footerH,
+        secondValue, secondDetail, info[2].online and info[2].color or c.bad)
+end
+
+local function drawPowerCockpitV2(w, c, scale, x, y, width, height, halfGauge, forceGauge, pairedMainW)
+    local info = powerInfo(w, c)
+    roundPanel(x, y, width, height, c.panel, c.outline)
+    local sliced = halfGauge == "left" or halfGauge == "right"
+    local pad = sliced and px(5, scale, 3, 8) or px(8, scale, 4, 12)
+    setFontSize("small")
+    lcd.color(c.muted)
+    drawText(x + pad, y + px(5, scale, 3, 8), info.fuelMode and T(w, "Fuel") or T(w, "Battery"))
+    local innerX = x + pad
+    local innerY = y + (sliced and px(12, scale, 8, 16) or px(18, scale, 12, 24))
+    local innerW, innerBottom = width - pad * 2, y + height - pad
+    if pairedMainW then
+        innerW = math.min(innerW, pairedMainW)
+        if halfGauge == "left" then innerX = x + width - pad - innerW end
+    end
+    if info.gauge or forceGauge then
+        local gaugeValue = info.fuelMode and info.value or (info.percent or 0)
+        local gaugeShift = sliced and 3 or 0
+        local leftText, midText, rightText
+        local footerText = info.needsCells and T(w, "SET CELLS") or nil
+        if not info.fuelMode then leftText, midText, rightText = "0", "50", "100" end
+        drawFuelGauge(w, c, scale, innerX, innerW, innerY - gaugeShift, innerBottom - gaugeShift, gaugeValue,
+            width > height and 1.22 or 1.06, x + math.floor(width / 2), innerBottom - gaugeShift,
+            not info.fuelMode, info.raw, info.color, true, nil, nil, nil, footerText,
+            leftText, midText, rightText, halfGauge)
+    else
+        drawBatteryTowerV2(w, c, scale, innerX, innerY + 10, innerW, innerBottom - innerY - 10, info)
+    end
+end
+
+local function formatRpmScale(value)
+    value = math.floor((tonumber(value) or 0) + 0.5)
+    if value >= 1000 then return tostring(math.floor(value / 1000 + 0.5)) .. "K" end
+    return tostring(value)
+end
+
+local function drawRpmCockpitV2(w, c, scale, x, y, width, height, halfGauge, pairedMainW)
+    local rpm = w.rpmSource and math.max(0, filteredValue(w, "rpm", getVal(w.rpmSource), 0.3)) or 0
+    local maxRpm = clamp(math.floor(tonumber(w.rpmMax) or 8000), 1000, 50000)
+    local warnRpm = clamp(math.floor(tonumber(w.rpmWarn) or maxRpm * 0.8), 0, maxRpm)
+    local pct = clamp(rpm * 100 / maxRpm, 0, 100)
+    local warnPct = warnRpm * 100 / maxRpm
+    local col = rpm >= maxRpm and c.bad or (rpm >= warnRpm and c.warn or c.good)
+    roundPanel(x, y, width, height, c.panel, c.outline)
+    local sliced = halfGauge == "left" or halfGauge == "right"
+    local pad = sliced and px(5, scale, 3, 8) or px(8, scale, 4, 12)
+    setFontSize("small")
+    lcd.color(c.muted)
+    local title = T(w, "RPM")
+    drawText(x + width - pad - (getTextW(title) or 0), y + px(5, scale, 3, 8), title)
+    local topPad = halfGauge == "right" and px(12, scale, 8, 16) or px(18, scale, 12, 24)
+    local gaugeShift = sliced and 3 or 0
+    local innerW = pairedMainW and math.min(width - pad * 2, pairedMainW) or (width - pad * 2)
+    drawFuelGauge(w, c, scale, x + pad, innerW, y + topPad - gaugeShift, y + height - pad - gaugeShift,
+        pct, width > height and 1.22 or 1.06, x + math.floor(width / 2), y + height - pad - gaugeShift,
+        false, nil, col, false, true, warnPct, 100, formatValue(rpm) .. " " .. T(w, "RPM"),
+        "0", formatRpmScale(maxRpm / 2), formatRpmScale(maxRpm), halfGauge)
+end
+
+local function drawGaugePairV2(w, c, scale, x, y, width, height)
+    local gaugeW = math.floor(width / 2)
+    local pad = px(5, scale, 3, 8)
+    local mainW = math.max(1, math.min(gaugeW, width - gaugeW) - pad * 2)
+    local span = math.max(1, height - pad - px(12, scale, 8, 16))
+    local footerH = math.min(math.max(1, span - 1), gaugeFooterHeight())
+    local radius = math.max(1, math.min(mainW - 1, math.floor((span - footerH) * 0.98)))
+    local info = powerInfo(w, c)
+    local powerValue = info.fuelMode and info.value or (info.percent or 0)
+    local powerText = string.format("%.2fV", info.raw) .. tostring(math.floor(powerValue + 0.5)) .. "%"
+    local rpm = w.rpmSource and math.max(0, (getVal(w.rpmSource))) or 0
+    local rpmText = formatValue(rpm) .. " " .. T(w, "RPM")
+    local footerMaxH = math.max(12, footerH - 1)
+    local inset = math.max(px(5, scale, 3, 7), math.floor(radius * 0.06))
+    local batteryMaxW = math.max(1, mainW - inset * 2)
+    local rpmMaxW = math.max(1, mainW - inset * 2)
+    local textSetting = currentTextScale >= TEXT_SCALE_LARGE and 3
+        or (currentTextScale <= TEXT_SCALE_SMALL and 1 or 2)
+    local ladders = mainW < 180 and compactPairedFonts or widePairedFonts
+    for i = 1, #ladders[textSetting] do
+        local font = ladders[textSetting][i]
+        if font ~= nil then
+            setExactFont(font)
+            if getTextW(powerText) <= batteryMaxW and getTextW(rpmText) <= rpmMaxW
+                and getTextH(powerText) <= footerMaxH and getTextH(rpmText) <= footerMaxH then
+                pairedFooterFont = font
+                break
+            end
         end
     end
+    if pairedFooterFont == nil then
+        setAvailableFont(fontS, fontL, fontXL, fontXXL)
+        pairedFooterFont = currentFont
+    end
+    drawPowerCockpitV2(w, c, scale, x, y, gaugeW, height, "left", true, mainW)
+    drawRpmCockpitV2(w, c, scale, x + gaugeW, y, width - gaugeW, height, "right", mainW)
+    pairedFooterFont = nil
+end
+
+local function flightSource(w, index)
+    if index == 1 then return w.inFlight1Source, T(w, "Stat 1") end
+    if index == 2 then return w.inFlight2Source, T(w, "Stat 2") end
+    if index == 3 then return w.inFlight3Source, T(w, "Stat 3") end
+    return w.inFlight4Source, T(w, "Stat 4")
+end
+
+local function telemetrySource(w, index)
+    if index == 1 then return w.field1Source, T(w, "Tlm 1") end
+    if index == 2 then return w.field2Source, T(w, "Tlm 2") end
+    if index == 3 then return w.field3Source, T(w, "Tlm 3") end
+    return w.telemetry4Source, T(w, "Tlm 4")
+end
+
+local function drawRailItem(w, c, scale, x, cursor, width, height, kind, label, value, color)
+    if kind == "link" then
+        drawLinkCardV2(w, c, scale, x, cursor, width, height)
+    elseif kind == "timer" then
+        drawTimerCardV2(w, c, scale, x, cursor, width, height, label)
+    else
+        drawCardV2(c, scale, x, cursor, width, height, label, value, color)
+    end
+    return cursor + height
+end
+
+local function drawRailV2(w, c, scale, x, y, width, height, flightMode)
+    local compact = height < px(230, scale, 168, 250)
+    local gap = compact and 1 or px(3, scale, 1, 5)
+    local cursor = y
+    if flightMode then
+        local timerH = px(64, scale, 46, 72)
+        local rowAreaH = math.max(0, height - timerH - gap)
+        local rowH = math.max(px(20, scale, 17, 24), math.floor((rowAreaH - gap * 3) / 4))
+        for i = 1, 4 do
+            local src, label = flightSource(w, i)
+            if src then drawCardV2(c, scale, x, cursor, width, rowH,
+                sourceName(src, label), formatValue(getVal(src)), c.text) end
+            cursor = cursor + rowH + gap
+        end
+        drawTimerCardV2(w, c, scale, x, y + height - timerH, width, timerH, T(w, "Timer"))
+        return
+    end
+    local currentInRail = sourcePresent(w.currentSource)
+        and ((w.rotorwingMode or 1) == 2 or (w.batteryMode or 1) == 2)
+    local rpmInRail = sourcePresent(w.rpmSource)
+        and (w.rotorwingMode or 1) ~= 2
+    local telemetryRows = (w.field1Source and 1 or 0) + (w.field2Source and 1 or 0)
+        + (w.field3Source and 1 or 0) + (w.telemetry4Source and 1 or 0)
+    local count = 2 + (currentInRail and 1 or 0) + (rpmInRail and 1 or 0) + telemetryRows
+    local availableH = math.max(1, height - gap * (count - 1))
+    local unitH = math.max(1, math.floor(availableH / count))
+    local extra = availableH - unitH * count
+    local linkH = unitH + math.floor(extra / 2)
+    local timerH = unitH + extra - math.floor(extra / 2)
+    cursor = drawRailItem(w, c, scale, x, cursor, width, linkH, "link") + gap
+    cursor = drawRailItem(w, c, scale, x, cursor, width, timerH, "timer", flightCountText(w)) + gap
+    if currentInRail then
+        cursor = drawRailItem(w, c, scale, x, cursor, width, unitH, "card", T(w, "Current"),
+            formatAmps(filteredValue(w, "current", getVal(w.currentSource), 0.3)), c.secondary) + gap
+    end
+    if rpmInRail then
+        cursor = drawRailItem(w, c, scale, x, cursor, width, unitH, "card",
+            sourceName(w.rpmSource, T(w, "RPM")),
+            formatValue(filteredValue(w, "rpm", getVal(w.rpmSource), 0.3)), c.secondary) + gap
+    end
+    for i = 1, 4 do
+        local src, label = telemetrySource(w, i)
+        if src then
+            cursor = drawRailItem(w, c, scale, x, cursor, width, unitH, "card",
+                sourceName(src, label), formatValue(getVal(src)), c.text) + gap
+        end
+    end
+end
+
+local function drawMainV2(w, c, scale, scrW, scrH, telemetryOk)
     lcd.color(c.bg)
     lcd.drawFilledRectangle(0, 0, scrW, scrH)
-    local x18Widget = scrW <= 500
-    local x18ShortWidget = x18Widget and scrH < 200
-    local margin = px(18, scale, 6, math.floor(scrW * 0.045))
-    local rightW = px(250, scale, 150, math.floor(scrW * 0.38))
-    local rightX = scrW - margin - rightW
-    local topY = px(10, scale, 4, 14)
-    local linkBarH = px(56, scale, 26, 62)
-    local linkBarW = scrW - margin * 2
-    local linkX = margin
-    local linkY = topY + px(34, scale, 18, 38)
-    local link = getVal(w.rssiSource)
-    if link > 100 then
-        link = 100
+    local margin = px(10, scale, 5, math.floor(scrW * 0.035))
+    local gap = px(7, scale, 4, 10)
+    local railW = railWidthFor(scrW)
+    local powerW = scrW - margin * 2 - gap - railW
+    if powerW < scrW * 0.52 then
+        railW = math.floor(scrW * 0.32)
+        powerW = scrW - margin * 2 - gap - railW
     end
-    local linkCol = c.neutral
-    if w.rssiSource then
-        linkCol = score(w, "link", link, c)
-    end
-    local linkLabel = sourceName(w.rssiSource, T(w, "Link"))
-    lcd.color(linkCol)
-    setFontSize("large", scale)
-    lcd.drawText(linkX, topY, string.format("%s: %d%%", linkLabel, math.floor(link)))
-    roundPanel(linkX, linkY, linkBarW, linkBarH, px(6, scale, 3, 8), c.bg, c.barFrame)
-    lcd.color(linkCol)
-    local fillW = math.floor((linkBarW - 4) * clamp(link, 0, 100) / 100)
-    if fillW > 0 then
-        lcd.drawFilledRectangle(linkX + 2, linkY + 2, fillW, linkBarH - 4)
-    end
-    drawLinkMinText(w, scale, linkX, linkY, linkBarW, linkBarH)
-    if gaugeMode then
-        local fuelLeft = margin
-        local fuelRight = rightX - px(8, scale, 4, 14)
-        local fuelW = math.max(1, fuelRight - fuelLeft)
-        local fuelTop = linkY + linkBarH + px(92, scale, 54, 118) + 4
-        local fuelBottom = scrH - px(82, scale, 44, 94) + px(62, scale, 36, 80) + 4
-        local fuelCx = fuelLeft + math.floor(fuelW * 0.38) + px(14, scale, 8, 20)
-        local gaugeScale = x18ShortWidget and 2.02 or (x18Widget and 1.75 or 1.42)
-        if batteryGauge then
-            local percent = batteryFuelPercent(w, batt) or 0
-            local drop = px(6, scale, 4, 10) - 5
-            drawFuelGauge(w, c, scale, fuelLeft, fuelW, fuelTop + drop, fuelBottom + drop,
-                percent, gaugeScale, fuelCx, fuelBottom + drop, true, batt, battCol, true)
-        else
-            drawFuelGauge(w, c, scale, fuelLeft, fuelW, fuelTop, fuelBottom, batt, gaugeScale, fuelCx, fuelBottom)
-        end
-        if w.currentSource then
-            setFontSize("small", scale)
-            lcd.color(c.secondary)
-            local currentText = T(w, "Current") .. " " .. formatValue(getVal(w.currentSource)) .. "A"
-            lcd.drawText(fuelRight - (getTextW(currentText) or 0), fuelTop + px(2, scale, 1, 4), currentText)
-        end
+    local showRpmGauge = (w.rotorwingMode or 1) == 2
+    local dualMode = (w.powerSourceType or 1) ~= 2 and (w.batteryMode or 1) == 2
+    local modelH = px(preset(44, 48, 58), scale,
+        preset(40, 44, 50), preset(56, 64, 74))
+    local modelGap = px(5, scale, 3, 7)
+    local gaugeY = margin + modelH + modelGap
+    local gaugeH = scrH - margin - gaugeY
+    drawTopStatusStripV2(w, c, scale, margin, margin, powerW, modelH, w.armSeenAt ~= nil)
+    if dualMode then
+        drawDualBatteryCockpitV2(w, c, scale, margin, gaugeY, powerW, gaugeH)
+    elseif showRpmGauge then
+        drawGaugePairV2(w, c, scale, margin, gaugeY, powerW, gaugeH)
     else
-        local timerH = px(70, scale, 42, 86)
-        local battTop = linkY + linkBarH + px(20, scale, 10, 28)
-        local battBottom = scrH - timerH - px(x18Widget and 22 or 48, scale, x18Widget and 12 or 30, x18Widget and 34 or 62)
-        local mainLeft = margin
-        local mainRight = rightX - px(24, scale, 12, 32)
-        if mainRight < mainLeft + px(220, scale, 150, 260) then
-            mainRight = scrW - margin
-        end
-        local mainW = mainRight - mainLeft
-        local battW = clamp(math.floor(mainW * 0.94), px(250, scale, 170, 340), mainW)
-        local maxBattH = math.max(px(80, scale, 54, 96),
-            battBottom - battTop - px(x18ShortWidget and 8 or (x18Widget and 18 or 48),
-                scale, x18ShortWidget and 4 or (x18Widget and 10 or 28),
-                x18ShortWidget and 14 or (x18Widget and 30 or 58)))
-        local battH = clamp(math.floor(battW * 0.46), px(96, scale, 62, 118), math.min(px(190, scale, 118, 220), maxBattH))
-        local bx = mainLeft + math.floor((mainW - battW) * 0.72)
-        local by = math.max(battTop, battTop + math.floor((battBottom - battTop - battH) / 2))
-        local battSegments = 6
-        local slices = batteryIconSlicesFor(ratio, battSegments)
-        local space = px(4, scale, 2, 6)
-        local interiorW = battW - 6
-        local segW = math.floor((interiorW - (battSegments - 1) * space) / battSegments)
-        local segH = battH - 6
-        roundPanel(bx, by, battW, battH, px(6, scale, 3, 8), c.bg, c.outline)
-        for i = 1, battSegments do
-            lcd.color(i <= slices and battCol or c.batteryEmpty)
-            lcd.drawFilledRectangle(bx + 3 + (i - 1) * (segW + space), by + 3, segW, segH)
-        end
-        lcd.color(c.outline)
-        local headW = math.max(3, math.floor(battW * 0.035))
-        local headH = math.floor(battH * 0.48)
-        lcd.drawFilledRectangle(bx + battW + px(2, scale, 1, 4), by + math.floor((battH - headH) / 2), headW, headH)
-        local textY = by + battH + px(6, scale, 3, 10)
-        local voltageScale = scale * 1.5
-        setFontSize("huge", voltageScale)
-        lcd.color(battCol)
-        local vText = string.format("%.2fV", batt)
-        local voltageX = mainLeft
-        local vW = getTextW(vText) or 0
-        lcd.drawText(voltageX, textY, vText)
-        local percent = batteryFuelPercent(w, batt) or 0
-        local percentText = string.format("%d%%", math.floor(percent + 0.5))
-        setFontSize("huge", scale * 1.2)
-        lcd.color(battCol)
-        local percentX = voltageX + vW + px(12, scale, 6, 18) + 30
-        lcd.drawText(percentX, textY + px(2, scale, 1, 4), percentText)
-        local percentRight = percentX + (getTextW(percentText) or 0)
-        if w.currentSource then
-            local gap = px(18, scale, 10, 26)
-            local textPad = px(8, scale, 4, 12)
-            local currentRightX = mainRight - textPad
-            local currValue = formatValue(getVal(w.currentSource)) .. "A"
-            local currText = T(w, "Current") .. " " .. currValue
-            local currFont = "large"
-            setFontSize(currFont, scale)
-            local currentLeft = math.max(voltageX + vW + gap, percentRight + gap)
-            local room = currentRightX - currentLeft
-            local cW = getTextW(currText) or 0
-            if cW > room then
-                currText = currValue
-                cW = getTextW(currText) or 0
-            end
-            if cW > room then
-                gap = px(8, scale, 4, 12)
-                currentLeft = math.max(voltageX + vW + gap, percentRight + gap)
-                room = currentRightX - currentLeft
-            end
-            if cW > room then
-                currFont = "small"
-                setFontSize("small", scale)
-                cW = getTextW(currText) or 0
-            end
-            if cW > room then
-                currText = fitText(currText, room)
-                cW = getTextW(currText) or 0
-            end
-            if room <= 0 or cW > room then
-                currText = ""
-                cW = 0
-            end
-            setFontSize(currFont, scale)
-            lcd.color(c.secondary)
-            if currText ~= "" then
-                lcd.drawText(currentRightX - cW, textY + px(8, scale, 4, 12), currText)
-            end
-        end
+        drawPowerCockpitV2(w, c, scale, margin, gaugeY, powerW, gaugeH)
     end
-    local statTop = linkY + linkBarH + px(2, scale, 1, 6)
-    local statBottom = scrH - px(18, scale, 10, 26)
-    local statGap = px(1, scale, 0, 3)
-    local statRowH = math.floor((statBottom - statTop - statGap * 3) / 4)
-    statRowH = clamp(statRowH, px(28, scale, 28, 36), px(92, scale, 70, 100))
-    local statY = statTop
-    statY = drawInFlightStat(w, c, scale, rightX, statY, rightW, w.inFlight1Source, T(w, "Stat 1"), nil, statRowH) + statGap
-    statY = drawInFlightStat(w, c, scale, rightX, statY, rightW, w.inFlight2Source, T(w, "Stat 2"), nil, statRowH) + statGap
-    statY = drawInFlightStat(w, c, scale, rightX, statY, rightW, w.inFlight3Source, T(w, "Stat 3"), nil, statRowH) + statGap
-    statY = drawInFlightStat(w, c, scale, rightX, statY, rightW, w.inFlight4Source, T(w, "Stat 4"), nil, statRowH)
-    local timerScale = scale * 1.5
-    setFontSize("huge", timerScale)
-    lcd.color(c.text)
-    local timeText = formatTime(timerSeconds(w))
-    local tx
-    if gaugeMode then
-        tx = math.max(margin, rightX - px(10, scale, 5, 16) - (getTextW(timeText) or 0))
-    else
-        tx = math.floor((scrW - (getTextW(timeText) or 0)) / 2)
-    end
-    local ty = scrH - px(82, scale, 44, 94)
-    local b = px(2, timerScale, 1, 3)
-    lcd.drawText(tx + b, ty, timeText)
-    lcd.drawText(tx, ty, timeText)
+    drawRailV2(w, c, scale, margin + powerW + gap, margin, railW, scrH - margin * 2, false)
+    if not telemetryOk then drawNoTelemetry(w, c, scrW, scrH) end
 end
+
+local function drawInFlightV2(w, c, scale, scrW, scrH)
+    lcd.color(c.bg)
+    lcd.drawFilledRectangle(0, 0, scrW, scrH)
+    local compact = scrH < px(250, scale, 190, 280)
+    local margin = compact and px(7, scale, 4, 9) or px(9, scale, 4, math.floor(scrW * 0.035))
+    local gap = compact and px(5, scale, 3, 7) or px(7, scale, 4, 10)
+    local showRpmGauge = (w.rotorwingMode or 1) == 2
+    local dualMode = (w.powerSourceType or 1) ~= 2 and (w.batteryMode or 1) == 2
+    local linkH = showRpmGauge and px(preset(42, 46, 56), scale,
+            preset(38, 42, 48), preset(50, 54, 68))
+        or (compact and px(preset(42, 46, 56), scale,
+                preset(38, 42, 48), preset(50, 52, 68))
+            or px(preset(50, 58, 68), scale,
+                preset(42, 44, 54), preset(62, 70, 84)))
+    drawLinkCardV2(w, c, scale, margin, margin, scrW - margin * 2, linkH)
+    local top = margin + linkH + gap
+    local railW = railWidthFor(scrW)
+    local powerW = scrW - margin * 2 - gap - railW
+    local contentH = scrH - top - margin
+    if dualMode then
+        drawDualBatteryCockpitV2(w, c, scale, margin, top, powerW, contentH)
+    elseif showRpmGauge then
+        drawGaugePairV2(w, c, scale, margin, top, powerW, contentH)
+    else
+        drawPowerCockpitV2(w, c, scale, margin, top, powerW, contentH)
+    end
+    drawRailV2(w, c, scale, margin + powerW + gap, top, railW, scrH - top - margin, true)
+end
+
 local function paint(w, ...)
     currentFont = nil
+    metricText, metricFont = nil, nil
+    local fontSetting = clamp(math.floor(finiteNumber(w.fontSize) or 2), 1, 3)
+    currentFontSetting = fontSetting
+    if fontSetting == 1 then
+        currentTextScale = TEXT_SCALE_SMALL
+    elseif fontSetting == 3 then
+        currentTextScale = TEXT_SCALE_LARGE
+    else
+        currentTextScale = TEXT_SCALE_MEDIUM
+    end
     local scrW, scrH = windowSize(...)
     local scale = scaleFor(scrW, scrH)
-    local x18Widget = scrW <= 500
-    local visualScale = scale * 1.1
-    local imageScale = scale * 1.5
-    local margin = px(15, scale, 4, math.floor(scrW * 0.05))
-    local gap = px(16, scale, 4, 24)
-    local topMargin = px(17, scale, 3, 22)
-    local rightPad = px(35, scale, 8, math.floor(scrW * 0.08))
-    local imageW = px(220, imageScale, 52, math.floor(scrW * 0.45))
-    local imageH = px(132, imageScale, 38, math.floor(scrH * 0.45))
-    local imageX, imageY = margin, 0
-    local drawImageW = math.floor(imageW * 0.8 + 0.5)
-    local drawImageH = math.floor(imageH * 0.8 + 0.5)
-    local drawImageX = imageX
-    local drawImageY = imageY + math.floor((imageH - drawImageH) / 2)
-    local lqBarW = px(180, visualScale, 66, math.floor(scrW * 0.33))
-    local lqBarH = px(39, visualScale, 16, math.floor(scrH * 0.13))
-    local lineGap = px(31, scale, 16, 38)
     local c = theme(w)
     if not isUsableWidgetSize(scrW, scrH) then
         drawSizePrompt(w, c, scale, scrW, scrH)
@@ -1576,254 +2063,34 @@ local function paint(w, ...)
     end
     if w.postFlight and not w.flightActive then
         drawPostFlight(w, c, scale, scrW, scrH)
-        return 
+        return
     end
     local telemetryOk = telemetryPresent(w)
     if w.flightActive and tonumber(w.inFlightScreen) ~= 2 then
-        drawInFlight(w, c, scale, scrW, scrH)
+        drawInFlightV2(w, c, scale, scrW, scrH)
         if not telemetryOk then
             drawNoTelemetry(w, c, scrW, scrH)
         end
-        return 
+        return
     end
-    lcd.color(c.bg)
-    lcd.drawFilledRectangle(0, 0, scrW, scrH)
-    local drawn = false
-    if w.imageFile and w.imageFile ~= "" then
-        if not w.selectedBmp or w.selectedFile ~= w.imageFile then
-            w.selectedBmp = nil
-            w.selectedFile = w.imageFile
-            if lcd.loadBitmap then
-                local ok, bmp = pcall(function()
-                    return lcd.loadBitmap(w.imageFile)
-                end)
-                if ok then
-                    w.selectedBmp = bmp
-                end
-            end
-        end
-        if w.selectedBmp then
-            w.iconBmp = nil
-            w.iconLoaded = false
-            drawBitmapBox(drawImageX, drawImageY, drawImageW, drawImageH, w.selectedBmp)
-            drawn = true
-        end
-    end
-    if not drawn and not w.iconLoaded and lcd.loadBitmap then
-        w.iconLoaded = true
-        local ok, bmp = pcall(function()
-            return lcd.loadBitmap("SCRIPTS:/MultiDash/MultiDash.png")
-        end)
-        if ok then
-            w.iconBmp = bmp
-        end
-    end
-    if not drawn and w.iconBmp then
-        drawBitmapBox(drawImageX, drawImageY, drawImageW, drawImageH, w.iconBmp)
-    end
-    local batt = getVal(w.batterySource)
-    local fuelMode = (w.powerSourceType or 1) == 2
-    if fuelMode then
-        batt = batteryFuelPercent(w, batt) or batt
-    end
-    local perCell = 0
-    local ratio = 0
-    local slices = 0
-    local battCol = c.bad
-    if not fuelMode then
-        local cells = cellsFor(w, batt)
-        if batt > 0 and cells > 0 then
-            perCell = batt / cells
-        end
-        ratio = batteryIconRatio(w, perCell, batt)
-        slices = batteryIconSlices(ratio)
-        if perCell >= (w.battHigh or 4.15) then
-            battCol = c.good
-        elseif perCell >= (w.battMid or 3.75) then
-            battCol = c.warn
-        end
-    end
-    local mainGaugeScale = x18Widget and 2.18 or 2.1
-    if fuelMode or tonumber(w.batteryStyle) == 2 then
-        local gaugeW = math.floor(scrW * 0.72)
-        local gaugeLeft = math.floor((scrW - gaugeW) / 2)
-        local gaugeTop = imageY + imageH + px(6, scale, 3, 10)
-        local gaugeBottom = scrH - px(70, scale, 34, 84) - px(4, scale, 2, 8)
-        if fuelMode then
-            drawFuelGauge(w, c, scale, gaugeLeft, gaugeW, gaugeTop, gaugeBottom,
-                batt, mainGaugeScale, math.floor(scrW / 2), gaugeBottom)
-        else
-            local percent = batteryFuelPercent(w, batt) or 0
-            drawFuelGauge(w, c, scale, gaugeLeft, gaugeW, gaugeTop, gaugeBottom,
-                percent, mainGaugeScale, math.floor(scrW / 2), gaugeBottom, true, batt, battCol)
-        end
-    else
-        local leftSafe = imageX + imageW + gap
-        local rightSafe = scrW - rightPad - lqBarW - gap
-        local centerAreaW = rightSafe - leftSafe
-        local maxBattW = math.floor(scrW * 0.36)
-        if centerAreaW > 0 then
-            maxBattW = math.min(maxBattW, math.floor(centerAreaW * 0.98))
-        end
-        local bottomReserve = px(92, scale, 48, 130)
-        local by = px(34, scale, 8, 42)
-        local maxBattH = scrH - by - bottomReserve
-        local battH = math.min(math.floor(scrH * 0.71), maxBattH, math.floor(maxBattW / 0.6))
-        battH = clamp(battH, px(120, visualScale, 78, math.floor(scrH * 0.55)), math.floor(scrH * 0.78))
-        local battW = math.floor(battH * 0.6)
-        local centerX = math.floor((scrW - battW) / 2)
-        local maxX = scrW - rightPad - lqBarW - gap - battW
-        local bx = maxX >= leftSafe and clamp(centerX, leftSafe, maxX) or clamp(centerX, margin, scrW - margin - battW)
-        local space = 2
-        local interiorH = battH - 4
-        local segH = math.floor((interiorH - (5 - 1) * space) / 5)
-        local segW = battW - 4
-        roundPanel(bx, by, battW, battH, px(6, scale, 3, 8), c.bg, c.outline)
-        for i = 1, 5 do
-            local yOff = by + 2 + (i - 1) * (segH + space)
-            if i > (5 - slices) then
-                lcd.color(battCol)
-            else
-                lcd.color(c.batteryEmpty)
-            end
-            lcd.drawFilledRectangle(bx + 2, yOff, segW, segH)
-        end
-        lcd.color(c.outline)
-        local headW = math.floor(battW * 0.4)
-        local headX = bx + math.floor((battW - headW) / 2)
-        local headH = math.max(2, math.floor(battH * 0.05))
-        lcd.drawFilledRectangle(headX, by - headH - 2, headW, headH)
-        local battCenter = bx + math.floor(battW / 2)
-        local voltageY = by + battH + px(10, scale, 4, 14)
-        local percent = batteryFuelPercent(w, batt)
-        drawVoltagePercentStack(battCenter, voltageY, batt, percent, battCol, scale)
-    end
-    lcd.color(c.text)
-    local timerScale = scale * 1.5
-    setFontSize("huge", timerScale)
-    local timerText = formatTime(timerSeconds(w))
-    local timerY = scrH - px(70, scale, 34, 84)
-    local statusH, statusW, statusY
-    if w.statusSource then
-        statusH = px(32, scale, 24, 40)
-        statusW = px(220, scale, 130, math.floor(scrW * 0.36))
-        local gapY = px(5, scale, 3, 8)
-        local timerH = math.max(getTextH(timerText), px(44, timerScale, 28, 60))
-        timerY = timerY - statusH - gapY
-        statusY = math.min(scrH - statusH - px(2, scale, 1, 4), timerY + timerH + gapY)
-    end
-    setFontSize("small", scale)
-    local flightsText = T(w, "Flights") .. ": " .. tostring(math.floor(tonumber(w.flightCount) or 0))
-    local flightsY = timerY - px(34, scale, 24, 40)
-    if w.statusSource then
-        drawStatusBar(w, c, scale, margin, statusY, statusW, statusH)
-    end
-    local flightsBold = px(1, scale, 1, 2)
-    lcd.color(c.secondary)
-    lcd.drawText(margin, flightsY, flightsText)
-    lcd.drawText(margin + flightsBold, flightsY, flightsText)
-    setFontSize("huge", timerScale)
-    lcd.color(c.text)
-    local timerBold = px(2, timerScale, 1, 3)
-    lcd.drawText(margin + timerBold, timerY, timerText)
-    lcd.drawText(margin, timerY, timerText)
-    local rssi = getVal(w.rssiSource)
-    if rssi > 100 then
-        rssi = 100
-    end
-    local rCol = c.neutral
-    if rssi >= (w.linkHigh or 98) then
-        rCol = c.good
-    elseif rssi >= (w.linkMid or 80) then
-        rCol = c.warn
-    elseif rssi > 0 then
-        rCol = c.bad
-    end
-    local rp = rightPad
-    local ty = topMargin
-    lcd.color(rCol)
-    setFontSize("large", scale)
-    local lqTxt = string.format("%s: %d%%", sourceName(w.rssiSource, T(w, "Link")), math.floor(rssi))
-    local lqW = getTextW(lqTxt) or 0
-    lcd.drawText(scrW - rp - lqW, ty, lqTxt)
-    local bW2, bH2 = lqBarW, lqBarH
-    local bx2 = scrW - rp - bW2
-    local barY = ty + px(44, scale, 24, 50)
-    roundPanel(bx2, barY, bW2, bH2, px(6, scale, 3, 8), c.bg, c.barFrame)
-    lcd.color(rCol)
-    local segs = 10
-    local space = px(2, scale, 1, 3)
-    local inset = px(2, scale, 1, 4)
-    local usable = bW2 - inset * 2
-    local segW = math.floor((usable - (segs - 1) * space) / segs)
-    if segW < 1 then
-        segW = 1
-    end
-    local act
-    if rssi >= (w.linkHigh or 98) then
-        act = segs
-    else
-        act = math.floor((rssi / 100) * segs)
-    end
-    if act < 0 then
-        act = 0
-    end
-    if act > segs then
-        act = segs
-    end
-    if act == segs then
-        lcd.drawFilledRectangle(bx2 + inset, barY + inset, bW2 - inset * 2, bH2 - inset * 2)
-    else
-        for i = 0, act - 1 do
-            local xOff = bx2 + inset + i * (segW + space)
-            lcd.drawFilledRectangle(xOff, barY + inset, segW, bH2 - inset * 2)
-        end
-    end
-    drawLinkMinText(w, scale, bx2, barY, bW2, bH2)
-    if w.rpmSource then
-        local rpm = getVal(w.rpmSource)
-        local rpmTxt = "RPM: " .. formatValue(rpm)
-        local rpmY = barY + bH2 + px(34, scale, 20, 42)
-        setFontSize("large", scale)
-        lcd.color(c.neutral)
-        lcd.drawText(scrW - rp - (getTextW(rpmTxt) or 0), rpmY, rpmTxt)
-    end
-    local by2 = scrH - px(102, scale, 58, 118) - lineGap * 2
-    lcd.color(c.muted)
-    setFontSize("small", scale)
-    local fieldRight = scrW - rp
-    drawCurrentRight(w, fieldRight, by2 - 2, scale)
-    drawSourceRight(w.field1Source, "Tlm 1", fieldRight, by2 + lineGap - 2)
-    drawSourceRight(w.field2Source, "Tlm 2", fieldRight, by2 + lineGap * 2 - 2)
-    drawSourceRight(w.field3Source, "Tlm 3", fieldRight, by2 + lineGap * 3 - 2)
-    drawSourceRight(w.telemetry4Source, "Tlm 4", fieldRight, by2 + lineGap * 4 - 2)
-    if w.armSeenAt and not w.flightActive then
-        local barH = px(32, scale, 17, 38)
-        local barY = imageY + imageH + px(3, scale, 1, 6)
-        local barW = math.floor(drawImageW * 0.72)
-        local barX = drawImageX + math.floor((drawImageW - barW) / 2)
-        roundPanel(barX, barY, barW, barH, px(7, scale, 3, 9), c.warn, c.outline)
-        setFontSize("small", scale)
-        local txt = T(w, "ARMED")
-        local txtX = barX + math.floor((barW - (getTextW(txt) or 0)) / 2)
-        local txtY = barY - px(3, scale, 1, 5)
-        local bold = px(1, scale, 1, 2)
-        lcd.color(lcd.RGB(0, 0, 0))
-        lcd.drawText(txtX, txtY, txt)
-        lcd.drawText(txtX + bold, txtY, txt)
-    end
-    if not telemetryOk then
-        drawNoTelemetry(w, c, scrW, scrH)
-    end
+    drawMainV2(w, c, scale, scrW, scrH, telemetryOk)
 end
 local function wakeup(w)
     if not w then return end
     local now = os.clock()
     if now >= (w.nextRefresh or 0) then
-        updateFlight(w, now)
+        local armed = updateFlight(w, now)
+        w._armed = armed
         updateLinkMinimum(w, now)
-        w.nextRefresh = now + 0.1
-        if lcd and type(lcd.invalidate) == "function" then
+        updateAudioCues(w, armed)
+        local visible = true
+        if lcd and type(lcd.isVisible) == "function" then
+            local ok, value = pcall(lcd.isVisible)
+            if ok and value == false then visible = false end
+        end
+        local interval = not visible and 1.0 or ((armed or w.flightActive) and 0.1 or (w.postFlight and 0.5 or 0.25))
+        w.nextRefresh = now + interval
+        if visible and lcd and type(lcd.invalidate) == "function" then
             pcall(lcd.invalidate)
         end
     end
@@ -1835,11 +2102,13 @@ local function wakeup(w)
 end
 local function close(w)
     if not w then return end
-    flush(w)
-    w.selectedBmp = nil
-    w.iconBmp = nil
-    w.stats = nil
-    w.statOrder = nil
+    w.selectedBmp, w.selectedFile, w._powerInfo, w._dualPowerInfo = nil, nil, nil, nil
+    w._filtered, w._batteryLevels, w._sourceClears = nil, nil, nil
+    w._timerTextSeconds, w._timerText = nil, nil
+    w._flightLabelCount, w._flightLabelLanguage, w._flightLabel = nil, nil, nil
+    w._audioArmSource, w._audioArmed, w._telemetryCuePlayed = nil, nil, nil
+    w.stats, w.statOrder = nil, nil
+    defaultIconBmp, defaultIconAttempted = nil, false
     summaryModule, summaryApi = nil, nil
 end
 
